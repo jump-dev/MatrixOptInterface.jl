@@ -1,2 +1,2 @@
 # MatrixOptInterface.jl
-An interface to pass matrix form problems
+An interface for matrix form optimization problems
