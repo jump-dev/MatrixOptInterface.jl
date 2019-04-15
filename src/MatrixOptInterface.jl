@@ -5,7 +5,7 @@ using MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MathOptInterface.Utilities
 
-export MatrixOptimizer
+# export MatrixOptimizer
 
 @enum ConstraintSense EQUAL_TO GREATER_THAN LESS_THAN
 

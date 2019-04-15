@@ -1,23 +1,23 @@
 
 MOIU.@model(MIPInnerModel,
-(MOI.ZeroOne, MOI.Integer),
+(),
 (MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
 (),
 (),
-(MOI.SingleVariable),
-(MOI.ScalarAffineFunction),
+(MOI.SingleVariable,),
+(MOI.ScalarAffineFunction,),
 (),
 ()
 )
 
-const Model = MOIU.UniversalFallback{MIPInnerModel{Float64}}
+const Model{T} = MOIU.UniversalFallback{MIPInnerModel{T}}
 
 """
 Model()
 Create an empty instance of MatrixOptInterface.Model.
 """
-function Model()
-    return MOIU.UniversalFallback(MIPInnerModel{Float64}())
+function Model{T}() where T
+    return MOIU.UniversalFallback(MIPInnerModel{T}())
 end
 
 function Base.show(io::IO, ::Model)
@@ -25,8 +25,8 @@ function Base.show(io::IO, ::Model)
     return
 end
 
-# abstract type AbstractLPForm{T} end
-struct LPMatrixOptInterfaceForm{T}
+abstract type AbstractLPForm{T} end
+struct LPMatrixOptInterfaceForm{T} <: AbstractLPForm{T}#, V<:AbstractVector{T}, M<:AbstractMatrix{T}}
     direction::MOI.OptimizationSense
     c::Vector{T}
     A::Matrix{T}
@@ -35,19 +35,19 @@ struct LPMatrixOptInterfaceForm{T}
     v_lb::Vector{T}
     v_ub::Vector{T}
 end
-struct LPStandardForm{T}# <: AbstractLPForm{T}
+struct LPStandardForm{T} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
     c::Vector{T}
     A::Matrix{T}
     b::Vector{T}
 end
-struct LPCannonicalForm{T}
+struct LPCannonicalForm{T} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
     c::Vector{T}
     A::Matrix{T}
     b::Vector{T}
 end
-struct LPSolverForm{T}
+struct LPSolverForm{T} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
     c::Vector{T}
     A::Matrix{T}
@@ -61,10 +61,11 @@ struct MILP{T}
     variable_type
 end
 
-function MatrixOptInterfaceForm(lp::MatrixOptInterfaceForm{T}) where T
+function change_form(::Type{F}, lp::F) where {F <: AbstractLPForm{T}} where T
     return lp
 end
-function MatrixOptInterfaceForm(lp::LPStandardForm{T}) where T
+
+function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPStandardForm{T}) where T
     return LPMatrixOptInterfaceForm{T}(
         lp.direction,
         lp.c,
@@ -75,7 +76,7 @@ function MatrixOptInterfaceForm(lp::LPStandardForm{T}) where T
         fill(typemax(T), length(lp.c)),
     )
 end
-function MatrixOptInterfaceForm(lp::LPCannonicalForm{T}) where T
+function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPCannonicalForm{T}) where T
     return LPMatrixOptInterfaceForm{T}(
         lp.direction,
         lp.c,
@@ -86,7 +87,7 @@ function MatrixOptInterfaceForm(lp::LPCannonicalForm{T}) where T
         fill(typemax(T), length(lp.c)),
     )
 end
-function MatrixOptInterfaceForm(lp::LPSolverForm{T}) where T
+function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPSolverForm{T}) where T
     c_lb = fill(typemin(T), length(lp.b))
     c_ub = fill(typemax(T), length(lp.b))
     for i in eachindex(lp.b)
@@ -112,8 +113,119 @@ function MatrixOptInterfaceForm(lp::LPSolverForm{T}) where T
     )
 end
 
+function change_form(::Type{LPCannonicalForm{T}}, lp::LPMatrixOptInterfaceForm{T}) where T
+    has_c_upper = Int[]
+    has_c_lower = Int[]
+    sizehint!(has_c_upper, length(lp.c_ub))
+    sizehint!(has_c_lower, length(lp.c_ub))
+    for i in eachindex(lp.c_ub)
+        if lp.c_ub < Inf
+            push!(has_c_upper, i)
+        end
+        if lp.c_lb > -Inf
+            push!(has_c_lower, i)
+        end
+    end
+    has_v_upper = Int[]
+    has_v_lower = Int[]
+    sizehint!(has_v_upper, length(lp.v_ub))
+    sizehint!(has_v_lower, length(lp.v_ub))
+    for i in eachindex(lp.v_ub)
+        if lp.v_ub < Inf
+            push!(has_v_upper, i)
+        end
+        if lp.v_lb > -Inf
+            push!(has_v_lower, i)
+        end
+    end
+    Id = Matrix{T}(I, length(lp.c), length(lp.c))
+    new_A = vcat(
+        lp.A[has_c_upper,:],
+        -lp.A[has_c_lower,:],
+        Id[has_v_upper,:],
+        -Id[has_v_lower,:],
+                )
+    new_b = vcat(
+        lp.c_ub[has_c_upper],
+        -lp.c_lb[has_c_lower],
+        lp.v_ub[has_v_upper],
+        -lp.v_lb[has_v_lower],
+    )
+    return LPCannonicalForm{T}(
+        lp.direction,
+        lp.c,
+        new_A,
+        new_b
+    )
+end
+function change_form(::Type{LPCannonicalForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
+    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
+    change_form(LPCannonicalForm{T}, lp)
+end
+
+function change_form(::Type{LPStandardForm{T}}, lp::LPCannonicalForm{T}) where T
+    new_A = hcat(
+        lp.A,
+        -lp.A,
+        Matrix{T}(I, length(lp.b), length(lp.b))
+    )
+    new_c = vcat(
+        lp.c,
+        -lp.c,
+        fill(0.0, length(lp.b))
+    )
+    return LPStandardForm{T}(
+        lp.direction,
+        new_c,
+        new_A,
+        copy(lp.b)
+    )
+end
+function change_form(::Type{LPStandardForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
+    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
+    new_lp = change_form(LPCannonicalForm{T}, temp_lp)
+    change_form(LPStandardForm{T}, new_lp)
+end
+
+function change_form(::Type{LPSolverForm{T}}, lp::LPMatrixOptInterfaceForm{T}) where T
+    new_A = copy(lp.A)
+    senses = fill(LESS_THAN, length(lp.c_lb))
+    new_b = fill(NaN, length(lp.c_lb))
+    for i in eachindex(lp.c_lb)
+        if lp.c_lb[i] == lp.c_ub[i]
+            senses[i] = EQUAL_TO
+            new_b[i] = lp.c_lb[i]
+        elseif lp.c_lb[i] > -Inf && lp.c_ub[i] < Inf
+            senses[i] = GREATER_THAN
+            new_b[i] = lp.c_lb[i]
+            push!(new_b, lp.c_ub[i])
+            push!(sense, LESS_THAN)
+            new_A = vcat(new_A, lp.A[i,:])
+        elseif lp.c_lb[i] > -Inf
+            senses[i] = GREATER_THAN
+            new_b[i] = lp.c_lb[i]
+        elseif lp.c_ub[i] < Inf
+            senses[i] = LESS_THAN
+            new_b[i] = lp.c_ub[i]
+        end
+    end
+    return LPMatrixOptInterfaceForm{T}(
+        lp.direction,
+        lp.c,
+        new_A,
+        new_b,
+        senses,
+        lp.v_lb,
+        lp.v_ub,
+    )
+end
+function change_form(::Type{LPSolverForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
+    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
+    change_form(LPSolverForm{T}, temp_lp)
+end
+
 """
-reasobale forms:
+Possible forms:
 
 A) LP standard form:
 
@@ -146,20 +258,20 @@ sense = {'<','>','='}
 
 
 """
-function MatrixOptimizer(raw_lp)
-    lp = MatrixOptInterfaceForm(raw_lp)
+function MatrixOptimizer(raw_lp::F) where {F <: AbstractLPForm{T}} where T
+    lp = change_form(LPMatrixOptInterfaceForm{T}, raw_lp)
     num_variables = length(lp.c)
     num_constraints = length(lp.c_lb)
 
     # use caching
-    optimizer = Model()
+    optimizer = Model{T}()
 
     x = MOI.add_variables(optimizer, num_variables)
 
     objective_function = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(lp.c, x), 0.0)
-    MOI.set(optimizer, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(),
+    MOI.set(optimizer, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(),
             objective_function)
-    MOI.set(optimizer, MOI.ObjectiveSense(), lp.sense)
+    MOI.set(optimizer, MOI.ObjectiveSense(), lp.direction)
 
     # Add constraints
     for i in 1:num_constraints

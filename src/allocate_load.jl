@@ -1,7 +1,7 @@
 const CI = MOI.ConstraintIndex
 const VI = MOI.VariableIndex
 
-mutable struct MOISolution{R} where R <: Real
+mutable struct MOISolution{R}
     termination_status::MOI.TerminationStatusCode
     primal_status::MOI.ResultStatusCode
     dual_status::MOI.ResultStatusCode
@@ -43,15 +43,28 @@ mutable struct ModelData
     c::Vector{Float64}
     # variable type
     # v_type::Vector{}
+    # function ModelData()
+    #     new(0,
+    #     0,
+    #     Int[],
+    #     Int[],
+    #     Float64[],
+    #     Float64[],
+    #     ConstraintSense[],
+    #     NaN,
+    #     Float64[]
+    #     )
+    # end
 end
 
 # This is tied to SCS's internal representation
 mutable struct ConeData
+    nrows::Dict{Int,Int}
     eq::Int # number of == constraints
-    lt::Int # number of <= equality constraints
-    # gt::Int # number of >= constraints
+    gt::Int # number of >= constraints
+    # lt::Int # number of <= equality constraints
     function ConeData()
-        new(0, 0)#, 0)
+        new(Dict{Int,Int}(), 0, 0)#, 0)
     end
 end
 
@@ -63,12 +76,13 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     sol::MOISolution
     options
     function Optimizer(solve_function = no_solve_function; options...)
-        new(ConeData(), false, nothing, MOISolution(), options)
+        new(solve_function, ConeData(), false, nothing, MOISolution(Float64), options)
     end
 end
 
 function no_solve_function(optimizer::Optimizer)
-    error("No solver set.")
+    println("No solver set.")
+    MOISolution(Float64)
 end
 
 MOI.get(::Optimizer, ::MOI.SolverName) = "Matrix optimizer"
@@ -79,7 +93,7 @@ end
 function MOI.empty!(optimizer::Optimizer)
     optimizer.maxsense = false
     optimizer.data = nothing # It should already be nothing except if an error is thrown inside copy_to
-    optimizer.sol.ret_val = 0
+    # optimizer.sol.ret_val = 0
 end
 
 MOIU.supports_allocate_load(::Optimizer, copy_names::Bool) = !copy_names
@@ -265,9 +279,9 @@ end
 
 function MOI.optimize!(optimizer::Optimizer)
     sol = optimizer.solve_function(optimizer)
-    sol.objval = (optimizer.maxsense ? -1 : 1) *
-                    dot(optimizer.data.c, sol.primal) +
-                    optimizer.objconstant
+    # sol.objval = (optimizer.maxsense ? -1 : 1) *
+    #                 dot(optimizer.data.c, sol.primal) +
+    #                 optimizer.objconstant
     optimizer.sol = sol
 end
 
@@ -310,3 +324,25 @@ function MOI.get(optimizer::Optimizer, ::MOI.ConstraintDual,
 end
 
 MOI.get(optimizer::Optimizer, ::MOI.ResultCount) = 1
+
+#=
+    query model data
+=#
+
+A_matrix_triplets(data::ModelData) = (data.I, data.J, data.V)
+A_matrix_sparse(data::ModelData) = sparse(A_matrix_triplets(data)..., data.m, data.n)
+A_matrix_dense(data::ModelData) = Matrix(A_matrix_sparse(data))
+
+
+function LPSolverForm(optimizer)
+    data = optimizer.data
+    raw_lp = LPSolverForm{Float64}(
+        optimizer.maxsense ? MOI.MAX_SENSE : MOI.MIN_SENSE,
+        data.c,
+        A_matrix_dense(data),
+        data.b,
+        data.sense,
+        fill(-Inf, data.n),
+        fill(Inf, data.n)
+    )
+end
