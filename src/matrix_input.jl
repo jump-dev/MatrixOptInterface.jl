@@ -1,304 +1,230 @@
+abstract type AbstractLPForm{T} <: MOI.ModelLike end
 
-MOIU.@model(MIPInnerModel,
-(),
-(MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
-(),
-(),
-(MOI.SingleVariable,),
-(MOI.ScalarAffineFunction,),
-(),
-()
-)
-
-const Model{T} = MOIU.UniversalFallback{MIPInnerModel{T}}
-
-"""
-Model()
-Create an empty instance of MatrixOptInterface.Model.
-"""
-function Model{T}() where T
-    return MOIU.UniversalFallback(MIPInnerModel{T}())
+# FIXME Taken from Polyhedra.jl, we should maybe move this to MOIU
+structural_nonzero_indices(a::SparseArrays.SparseVector) = SparseArrays.nonzeroinds(a)
+structural_nonzero_indices(a::AbstractVector) = eachindex(a)
+function _dot_terms(a::AbstractVector{T}) where T
+    return MOI.ScalarAffineTerm{T}[
+        MOI.ScalarAffineTerm{T}(a[i], MOI.VariableIndex(i))
+        for i in structural_nonzero_indices(a) if !iszero(a[i])
+    ]
+end
+function _dot(a::AbstractVector{T}) where T
+    return MOI.ScalarAffineFunction(_dot_terms(a), zero(T))
 end
 
-function Base.show(io::IO, ::Model)
-    print(io, "A MatrixOptInterface Model")
-    return
+function MOI.get(model::AbstractLPForm, ::MOI.ListOfModelAttributesSet)
+    list = MOI.AbstractModelAttribute[]
+    push!(list, MOI.ObjectiveSense())
+    if model.direction != MOI.FEASIBILITY_SENSE
+        push!(list, MOI.ObjectiveFunction{MOI.get(model, MOI.ObjectiveFunctionType())}())
+    end
+    return list
+end
+MOI.get(model::AbstractLPForm, ::MOI.ObjectiveSense) = model.direction
+function MOI.get(model::AbstractLPForm{T},
+                 ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}) where T
+    return _dot(model.c)
+end
+function MOI.get(model::AbstractLPForm{T}, ::MOI.ObjectiveFunctionType) where T
+    return MOI.ScalarAffineFunction{T}
 end
 
-abstract type AbstractLPForm{T} end
-struct LPMatrixOptInterfaceForm{T} <: AbstractLPForm{T}#, V<:AbstractVector{T}, M<:AbstractMatrix{T}}
+MOI.get(::AbstractLPForm, ::MOI.ListOfVariableAttributesSet) = MOI.AbstractVariableAttribute[]
+MOI.get(model::AbstractLPForm, ::MOI.NumberOfVariables) = length(model.c)
+function MOI.get(model::AbstractLPForm, ::MOI.ListOfVariableIndices)
+    # TODO return `collect` with MOI v0.9.15 (see https://github.com/jump-dev/MathOptInterface.jl/pull/1110)
+    return collect(MOIU.LazyMap{MOI.VariableIndex}(
+        i -> MOI.VariableIndex(i), # FIXME `LazyMap` needs a `Function` so cannot just give `MOI.VariableIndex`
+        1:MOI.get(model, MOI.NumberOfVariables())
+    ))
+end
+
+MOI.get(::AbstractLPForm, ::MOI.ListOfConstraintAttributesSet) = MOI.AbstractConstraintAttribute[]
+function MOI.get(model::AbstractLPForm{T}, ::MOI.ConstraintFunction,
+                 ci::MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}}) where T
+    return _dot(model.A[ci.value, :])
+end
+
+
+struct LPStandardForm{T, AT<:AbstractMatrix{T}} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
     c::Vector{T}
-    A::Matrix{T}
+    A::AT
+    b::Vector{T}
+end
+
+function MOI.get(model::LPStandardForm{T}, ::MOI.ListOfConstraints) where T
+    return [(MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}),
+            (MOI.VectorOfVariables, MOI.Nonnegatives)]
+end
+const EQ{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}}
+function MOI.get(
+    model::LPStandardForm{T},
+    ::MOI.ListOfConstraintIndices{
+        MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}}
+) where T
+    # TODO return `collect` with MOI v0.9.15 (see https://github.com/jump-dev/MathOptInterface.jl/pull/1110)
+    return collect(MOIU.LazyMap{EQ{T}}(
+        i -> EQ{T}(i), # FIXME `LazyMap` needs a `Function` so cannot just give `EQ{T}`
+        1:size(model.A, 1)
+    ))
+end
+function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet,
+                 ci::EQ)
+    return MOI.EqualTo(model.b[ci.value])
+end
+const NONNEG = MOI.ConstraintIndex{MOI.VectorOfVariables, MOI.Nonnegatives}
+function MOI.get(
+    model::LPStandardForm,
+    ::MOI.ListOfConstraintIndices{
+        MOI.VectorOfVariables, MOI.Nonnegatives}
+)
+    return [NONNEG(1)]
+end
+function MOI.get(model::LPStandardForm, ::MOI.ConstraintFunction,
+                 ci::NONNEG)
+    return MOI.VectorOfVariables(MOI.get(model, MOI.ListOfVariableIndices()))
+end
+function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet,
+                 ci::NONNEG)
+    return MOI.Nonnegatives(MOI.get(model, MOI.NumberOfVariables()))
+end
+
+struct LPGeometricForm{T, AT<:AbstractMatrix{T}} <: AbstractLPForm{T}
+    direction::MOI.OptimizationSense
+    c::Vector{T}
+    A::AT
+    b::Vector{T}
+end
+
+function MOI.get(model::LPGeometricForm{T}, ::MOI.ListOfConstraints) where T
+    return [(MOI.ScalarAffineFunction{T}, MOI.LessThan{T})]
+end
+const LT{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}, MOI.LessThan{T}}
+function MOI.get(
+    model::LPGeometricForm{T},
+    ::MOI.ListOfConstraintIndices{
+        MOI.ScalarAffineFunction{T}, MOI.LessThan{T}}
+) where T
+    # FIXME `copy_constraint` needs a `Vector`
+    return collect(MOIU.LazyMap{LT{T}}(
+        i -> LT{T}(i), # FIXME `LazyMap` needs a `Function` so cannot just give `LT{T}`
+        1:size(model.A, 1))
+    )
+end
+function MOI.get(model::LPGeometricForm, ::MOI.ConstraintSet,
+                 ci::LT)
+    return MOI.LessThan(model.b[ci.value])
+end
+
+abstract type LPMixedForm{T} <: AbstractLPForm{T} end
+
+function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraints) where T
+    list = Tuple{DataType, DataType}[]
+    for S in [MOI.EqualTo{T}, MOI.Interval{T}, MOI.GreaterThan{T}, MOI.LessThan{T}]
+        for F in [MOI.SingleVariable, MOI.ScalarAffineFunction{T}]
+            if !iszero(MOI.get(model, MOI.NumberOfConstraints{F, S}()))
+                push!(list, (F, S))
+            end
+        end
+    end
+    return list
+end
+
+struct BoundSense <: MOI.AbstractVariableAttribute end
+function MOI.get(model::LPMixedForm, ::BoundSense, vi::MOI.VariableIndex)
+    return _bound_sense(model.v_lb[vi.value], model.v_ub[vi.value])
+end
+
+const LinearBounds{T} = Union{MOI.EqualTo{T}, MOI.Interval{T}, MOI.GreaterThan{T}, MOI.LessThan{T}}
+
+function MOI.get(model::LPMixedForm{T}, ::MOI.NumberOfConstraints{MOI.ScalarAffineFunction{T}, S}) where {T, S <: LinearBounds{T}}
+    s = _sense(S)
+    return count(1:size(model.A, 1)) do i
+        _constraint_bound_sense(model, i) == s
+    end
+end
+const AFF{T, S} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}, S}
+function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{T}, S}) where {T, S <: LinearBounds{T}}
+    s = _sense(S)
+    # FIXME `copy_constraint` needs a `Vector`
+    return collect(MOIU.LazyMap{AFF{T, S}}(
+        i -> AFF{T, S}(i), # FIXME `LazyMap` needs a `Function` so cannot just give `AFF{T, S}`
+        Base.Iterators.Filter(1:size(model.A, 1)) do i
+            _constraint_bound_sense(model, i) == s
+        end
+    ))
+end
+
+const VBOUND{S} = MOI.ConstraintIndex{MOI.SingleVariable, S}
+function MOI.get(model::LPMixedForm{T}, ::MOI.NumberOfConstraints{MOI.SingleVariable, S}) where {T, S <: LinearBounds{T}}
+    s = _sense(S)
+    return count(MOI.get(model, MOI.ListOfVariableIndices())) do vi
+        MOI.get(model, BoundSense(), vi) == s
+    end
+end
+function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.SingleVariable, S}) where {T, S <: LinearBounds{T}}
+    s = _sense(S)
+    return collect(MOIU.LazyMap{VBOUND{S}}(
+        Base.Iterators.Filter(MOI.get(model, MOI.ListOfVariableIndices())) do vi
+            MOI.get(model, BoundSense(), vi) == s
+        end
+    ) do vi
+        VBOUND{S}(vi.value)
+    end)
+end
+function MOI.get(model::LPMixedForm, ::MOI.ConstraintFunction, ci::VBOUND)
+    return MOI.SingleVariable(MOI.VariableIndex(ci.value))
+end
+function MOI.get(model::LPMixedForm, ::MOI.ConstraintSet, ci::VBOUND)
+    return _bound_set(model.v_lb[ci.value], model.v_ub[ci.value])
+end
+
+struct LPForm{T, AT<:AbstractMatrix{T}} <: LPMixedForm{T}#, V<:AbstractVector{T}, M<:AbstractMatrix{T}}
+    direction::MOI.OptimizationSense
+    c::Vector{T}
+    A::AT
     c_lb::Vector{T}
     c_ub::Vector{T}
     v_lb::Vector{T}
     v_ub::Vector{T}
 end
-struct LPStandardForm{T} <: AbstractLPForm{T}
-    direction::MOI.OptimizationSense
-    c::Vector{T}
-    A::Matrix{T}
-    b::Vector{T}
+
+function _constraint_bound_sense(model::LPForm, i)
+    return _bound_sense(model.c_lb[i], model.c_ub[i])
 end
-struct LPCannonicalForm{T} <: AbstractLPForm{T}
-    direction::MOI.OptimizationSense
-    c::Vector{T}
-    A::Matrix{T}
-    b::Vector{T}
+function MOI.get(model::LPForm, ::MOI.ConstraintSet, ci::AFF)
+    return _bound_set(model.c_lb[ci.value], model.c_ub[ci.value])
 end
-struct LPSolverForm{T} <: AbstractLPForm{T}
+
+struct LPSolverForm{T, AT<:AbstractMatrix{T}} <: LPMixedForm{T}
     direction::MOI.OptimizationSense
     c::Vector{T}
-    A::Matrix{T}
+    A::AT
     b::Vector{T}
     senses::Vector{ConstraintSense}
     v_lb::Vector{T}
     v_ub::Vector{T}
 end
-struct MILP{T}
-    lp
-    variable_type
+
+function _constraint_bound_sense(model::LPSolverForm, i)
+    return model.senses[i]
 end
-
-function change_form(::Type{F}, lp::F) where {F <: AbstractLPForm{T}} where T
-    return lp
-end
-
-function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPStandardForm{T}) where T
-    return LPMatrixOptInterfaceForm{T}(
-        lp.direction,
-        lp.c,
-        lp.A,
-        lp.b,
-        lp.b,
-        fill(zero(T), length(lp.c)),
-        fill(typemax(T), length(lp.c)),
-    )
-end
-function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPCannonicalForm{T}) where T
-    return LPMatrixOptInterfaceForm{T}(
-        lp.direction,
-        lp.c,
-        lp.A,
-        fill(typemin(T), length(lp.b)),
-        lp.b,
-        fill(typemin(T), length(lp.c)),
-        fill(typemax(T), length(lp.c)),
-    )
-end
-function change_form(::Type{LPMatrixOptInterfaceForm{T}}, lp::LPSolverForm{T}) where T
-    c_lb = fill(typemin(T), length(lp.b))
-    c_ub = fill(typemax(T), length(lp.b))
-    for i in eachindex(lp.b)
-        if lp.senses[i] == LESS_THAN
-            c_ub[i] = lp.b[i]
-        elseif lp.senses[i] == GREATER_THAN
-            c_lb[i] = lp.b[i]
-        elseif lp.senses[i] == EQUAL_TO
-            c_lb[i] = lp.b[i]
-            c_ub[i] = lp.b[i]
-        else
-            error("invalid sign $(lp.senses[i])")
-        end
-    end
-    return LPMatrixOptInterfaceForm{T}(
-        lp.direction,
-        lp.c,
-        lp.A,
-        c_lb,
-        c_ub,
-        lp.v_lb,
-        lp.v_ub,
-    )
-end
-
-function change_form(::Type{LPCannonicalForm{T}}, lp::LPMatrixOptInterfaceForm{T}) where T
-    has_c_upper = Int[]
-    has_c_lower = Int[]
-    sizehint!(has_c_upper, length(lp.c_ub))
-    sizehint!(has_c_lower, length(lp.c_ub))
-    for i in eachindex(lp.c_ub)
-        if lp.c_ub < Inf
-            push!(has_c_upper, i)
-        end
-        if lp.c_lb > -Inf
-            push!(has_c_lower, i)
-        end
-    end
-    has_v_upper = Int[]
-    has_v_lower = Int[]
-    sizehint!(has_v_upper, length(lp.v_ub))
-    sizehint!(has_v_lower, length(lp.v_ub))
-    for i in eachindex(lp.v_ub)
-        if lp.v_ub < Inf
-            push!(has_v_upper, i)
-        end
-        if lp.v_lb > -Inf
-            push!(has_v_lower, i)
-        end
-    end
-    Id = Matrix{T}(I, length(lp.c), length(lp.c))
-    new_A = vcat(
-        lp.A[has_c_upper,:],
-        -lp.A[has_c_lower,:],
-        Id[has_v_upper,:],
-        -Id[has_v_lower,:],
-                )
-    new_b = vcat(
-        lp.c_ub[has_c_upper],
-        -lp.c_lb[has_c_lower],
-        lp.v_ub[has_v_upper],
-        -lp.v_lb[has_v_lower],
-    )
-    return LPCannonicalForm{T}(
-        lp.direction,
-        lp.c,
-        new_A,
-        new_b
-    )
-end
-function change_form(::Type{LPCannonicalForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
-    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
-    change_form(LPCannonicalForm{T}, lp)
-end
-
-function change_form(::Type{LPStandardForm{T}}, lp::LPCannonicalForm{T}) where T
-    new_A = hcat(
-        lp.A,
-        -lp.A,
-        Matrix{T}(I, length(lp.b), length(lp.b))
-    )
-    new_c = vcat(
-        lp.c,
-        -lp.c,
-        fill(0.0, length(lp.b))
-    )
-    return LPStandardForm{T}(
-        lp.direction,
-        new_c,
-        new_A,
-        copy(lp.b)
-    )
-end
-function change_form(::Type{LPStandardForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
-    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
-    new_lp = change_form(LPCannonicalForm{T}, temp_lp)
-    change_form(LPStandardForm{T}, new_lp)
-end
-
-function change_form(::Type{LPSolverForm{T}}, lp::LPMatrixOptInterfaceForm{T}) where T
-    new_A = copy(lp.A)
-    senses = fill(LESS_THAN, length(lp.c_lb))
-    new_b = fill(NaN, length(lp.c_lb))
-    for i in eachindex(lp.c_lb)
-        if lp.c_lb[i] == lp.c_ub[i]
-            senses[i] = EQUAL_TO
-            new_b[i] = lp.c_lb[i]
-        elseif lp.c_lb[i] > -Inf && lp.c_ub[i] < Inf
-            senses[i] = GREATER_THAN
-            new_b[i] = lp.c_lb[i]
-            push!(new_b, lp.c_ub[i])
-            push!(sense, LESS_THAN)
-            new_A = vcat(new_A, lp.A[i,:])
-        elseif lp.c_lb[i] > -Inf
-            senses[i] = GREATER_THAN
-            new_b[i] = lp.c_lb[i]
-        elseif lp.c_ub[i] < Inf
-            senses[i] = LESS_THAN
-            new_b[i] = lp.c_ub[i]
-        end
-    end
-    return LPMatrixOptInterfaceForm{T}(
-        lp.direction,
-        lp.c,
-        new_A,
-        new_b,
-        senses,
-        lp.v_lb,
-        lp.v_ub,
-    )
-end
-function change_form(::Type{LPSolverForm{T}}, lp::F) where {F <: AbstractLPForm{T}} where T
-    temp_lp = change_form(LPMatrixOptInterfaceForm{T}, lp)
-    change_form(LPSolverForm{T}, temp_lp)
-end
-
-"""
-Possible forms:
-
-A) LP standard form:
-
-opt <c, x>
-s.t.
-Ax == b
- x >= 0
-
-B) LP cannonical form:
-
-opt <c, x>
-s.t.
-Ax <= b
-
-C) MBP (our standard)
-opt <c, x>
-s.t.
-c_lb <= Ax <= c_ub
-v_lb <=  x <= v_ub
-
-D) Solver
-opt <c, x>
-s.t.
-Ax sense c_ub
-v_lb <=  x <= v_ub
-
-Extra
-vartype = {'C','I','B'}
-sense = {'<','>','='}
-
-
-"""
-function MatrixOptimizer(raw_lp::F) where {F <: AbstractLPForm{T}} where T
-    lp = change_form(LPMatrixOptInterfaceForm{T}, raw_lp)
-    num_variables = length(lp.c)
-    num_constraints = length(lp.c_lb)
-
-    # use caching
-    optimizer = Model{T}()
-
-    x = MOI.add_variables(optimizer, num_variables)
-
-    objective_function = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(lp.c, x), 0.0)
-    MOI.set(optimizer, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(),
-            objective_function)
-    MOI.set(optimizer, MOI.ObjectiveSense(), lp.direction)
-
-    # Add constraints
-    for i in 1:num_constraints
-        add_constraint(optimizer, 
-            MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(lp.A[i,:], x), 0.0),
-            lp.c_lb[i], lp.c_ub[i])
-    end
-
-    # Add bounds
-    for i in 1:num_variables
-        add_constraint(optimizer, 
-            MOI.SingleVariable(x[i]), lp.v_lb[i], lp.v_ub[i])
-    end
-
-    return optimizer
-end
-
-function add_constraint(optimizer, func, lb, ub)
-    if lb == ub > -Inf
-        MOI.add_constraint(optimizer, func, MOI.EqualTo(lb))
+function MOI.get(model::LPSolverForm, ::MOI.ConstraintSet, ci::AFF)
+    s = model.senses[ci.value]
+    β = model.b[ci.value]
+    if s == GREATER_THAN
+        return MOI.GreaterThan(β)
+    elseif s == LESS_THAN
+        return MOI.LessThan(β)
     else
-        if lb > -Inf && ub < Inf
-            MOI.add_constraint(optimizer, func, MOI.Interval(lb, ub))
-        elseif lb > -Inf
-            MOI.add_constraint(optimizer, func, MOI.GreaterThan(lb))
-        elseif ub < Inf
-            MOI.add_constraint(optimizer, func, MOI.LessThan(ub))
-        end
+        s == EQUAL_TO || error("Invalid $s")
+        return MOI.EqualTo(β)
     end
+end
+
+struct MILP{T, LP<:AbstractLPForm{T}}
+    lp::LP
+    variable_type::Vector{VariableType}
 end
