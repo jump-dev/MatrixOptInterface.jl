@@ -12,8 +12,8 @@ const dense_A = [1.0 2.0
 @testset "Matrix $(typeof(A))" for A in [
     dense_A, sparse(dense_A)
 ]
-    b = [5, 6]
-    c = [7, 8]
+    b = [5.0, 6.0]
+    c = [7.0, 8.0]
     @testset "Standard form LP" begin
         s = """
         variables: x1, x2
@@ -44,21 +44,21 @@ const dense_A = [1.0 2.0
         end
 
         @testset "change $(typeof(lp))" for lp in [
-            MatOI.LPStandardForm{Float64, typeof(A)}(
+            MatOI.LPStandardForm{Float64, typeof(A), typeof(c)}(
                 sense, c, A, b
             ),
-            MatOI.LPForm{Float64, typeof(A)}(
+            MatOI.LPForm{Float64, typeof(A), typeof(c)}(
                 sense, c, A, b, b, v_lb, v_ub
             ),
-            MatOI.LPSolverForm{Float64, typeof(A)}(
+            MatOI.LPSolverForm{Float64, typeof(A), typeof(c)}(
                 sense, c, A, b, [MatOI.EQUAL_TO, MatOI.EQUAL_TO], v_lb, v_ub
             )
         ]
             test_expected(lp)
             @testset "to $F" for F in [
                 #MatOI.LPStandardForm{Float64, typeof(A)}, # FIXME doesn't work as the form gets bloated in the conversion
-                MatOI.LPForm{Float64, typeof(A)},
-                MatOI.LPSolverForm{Float64, typeof(A)}
+                MatOI.LPForm{Float64, typeof(A), typeof(c)},
+                MatOI.LPSolverForm{Float64, typeof(A), typeof(c)}
             ]
                 test_expected(MatOI.change_form(F, lp))
             end
@@ -90,21 +90,21 @@ const dense_A = [1.0 2.0
         end
 
         @testset "change $(typeof(lp))" for lp in [
-            MatOI.LPGeometricForm{Float64, typeof(A')}(
+            MatOI.LPGeometricForm{Float64, typeof(A'), typeof(c)}(
                 sense, b, A', c
             ),
-            MatOI.LPForm{Float64, typeof(A')}(
+            MatOI.LPForm{Float64, typeof(A'), typeof(c)}(
                 sense, b, A', [-Inf, -Inf], c, v_lb, v_ub
             ),
-            MatOI.LPSolverForm{Float64, typeof(A')}(
+            MatOI.LPSolverForm{Float64, typeof(A'), typeof(c)}(
                 sense, b, A', c, [MatOI.LESS_THAN, MatOI.LESS_THAN], v_lb, v_ub
             )
         ]
             test_expected(lp)
             @testset "to $F" for F in [
-                MatOI.LPGeometricForm{Float64, typeof(A)},
-                MatOI.LPForm{Float64, typeof(A)},
-                MatOI.LPSolverForm{Float64, typeof(A)}
+                MatOI.LPGeometricForm{Float64, typeof(A), typeof(c)},
+                MatOI.LPForm{Float64, typeof(A), typeof(c)},
+                MatOI.LPSolverForm{Float64, typeof(A), typeof(c)}
             ]
                 test_expected(MatOI.change_form(F, lp))
             end
