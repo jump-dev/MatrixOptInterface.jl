@@ -57,6 +57,7 @@ end
 
 @enum VariableType CONTINUOUS INTEGER BINARY
 
+include("conic_form.jl")
 include("matrix_input.jl")
 include("change_form.jl")
 
