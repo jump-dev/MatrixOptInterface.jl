@@ -1,35 +1,29 @@
-mutable struct ConeData
-    f::Int # number of linear equality constraints
-    l::Int # length of LP cone
-    q::Int # length of SOC cone
-    qa::Vector{Int} # array of second-order cone constraints
-    s::Int # length of SD cone
-    sa::Vector{Int} # array of semi-definite constraints
-    ep::Int # number of primal exponential cone triples
-    ed::Int # number of dual exponential cone triples
-    p::Vector{Float64} # array of power cone params
-    nrows::Dict{Int, Int} # The number of rows of each vector sets, this is used by `constrrows` to recover the number of rows used by a constraint when getting `ConstraintPrimal` or `ConstraintDual`
-    function ConeData()
-        new(0, 0, 0, Int[], 0, Int[], 0, 0, Float64[], Dict{Int, Int}())
-    end
-end
-
-mutable struct ModelData
+mutable struct ModelData{T}
     m::Int # Number of rows/constraints
     n::Int # Number of cols/variables
     I::Vector{Int} # List of rows
     J::Vector{Int} # List of cols
-    V::Vector{Float64} # List of coefficients
-    b::Vector{Float64} # constants
-    objective_constant::Float64 # The objective is min c'x + objective_constant
-    c::Vector{Float64}
+    V::Vector{T} # List of coefficients
+    b::Vector{T} # constants
+    objective_constant::T # The objective is min c'x + objective_constant
+    c::Vector{T}
 end
 
-mutable struct ConicData
-    cone::ConeData
-    data::Union{Nothing, ModelData}
-    function ConicData()
-        return new(ConeData(), nothing)
+mutable struct ConicData{T}
+    f::Int # number of linear equality constraints
+    l::Int # length of LP conic
+    q::Int # length of SOC conic
+    qa::Vector{Int} # array of second-order conic constraints
+    s::Int # length of SD conic
+    sa::Vector{Int} # array of semi-definite constraints
+    ep::Int # number of primal exponential conic triples
+    ed::Int # number of dual exponential conic triples
+    p::Vector{Float64} # array of power conic params
+    nrows::Dict{Int, Int} # The number of rows of each vector sets, this is used by `constrrows` to recover the number of rows used by a constraint when getting `ConstraintPrimal` or `ConstraintDual`
+    data::Union{Nothing, ModelData{T}}
+
+    function ConicData{T}() where T
+        return new{T}(0, 0, 0, Int[], 0, Int[], 0, 0, Float64[], Dict{Int, Int}(), nothing)
     end
 end
 
@@ -46,17 +40,17 @@ const CONES = Dict(
 const CI = MOI.ConstraintIndex
 const VI = MOI.VariableIndex
 
-cons_offset(cone::MOI.Zeros) = cone.dimension
-cons_offset(cone::MOI.Nonnegatives) = cone.dimension
-cons_offset(cone::MOI.SecondOrderCone) = cone.dimension
-cons_offset(cone::MOI.PositiveSemidefiniteConeTriangle) = Int64((cone.side_dimension*(cone.side_dimension+1))/2)
+cons_offset(conic::MOI.Zeros) = conic.dimension
+cons_offset(conic::MOI.Nonnegatives) = conic.dimension
+cons_offset(conic::MOI.SecondOrderCone) = conic.dimension
+cons_offset(conic::MOI.PositiveSemidefiniteConeTriangle) = Int64((conic.side_dimension*(conic.side_dimension+1))/2)
 
-function restructure_arrays(_s::Array{Float64}, _y::Array{Float64}, cones::Array{<: MOI.AbstractVectorSet})
+function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.AbstractVectorSet}) where {T}
     i=0
-    s = Array{Float64}[]
-    y = Array{Float64}[]
-    for cone in cones
-        offset = cons_offset(cone)
+    s = Array{T}[]
+    y = Array{T}[]
+    for conic in cones
+        offset = cons_offset(conic)
         push!(s, _s[i.+(1:offset)])
         push!(y, _y[i.+(1:offset)])
         i += offset
@@ -64,91 +58,86 @@ function restructure_arrays(_s::Array{Float64}, _y::Array{Float64}, cones::Array
     return s, y
 end
 
-# Computes cone dimensions
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, MOI.Zeros})
+# Computes conic dimensions
+function constroffset(conic::ConicData{T}, ci::CI{<:MOI.AbstractFunction, MOI.Zeros}) where T
     return ci.value
 end
 #_allocate_constraint: Allocate indices for the constraint `f`-in-`s`
-# using information in `cone` and then update `cone`
-function _allocate_constraint(cone::ConeData, f, s::MOI.Zeros)
-    ci = cone.f
-    cone.f += MOI.dimension(s)
+# using information in `conic` and then update `conic`
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Zeros) where T
+    ci = conic.f
+    conic.f += MOI.dimension(s)
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, MOI.Nonnegatives})
-    return cone.f + ci.value
+function constroffset(conic::ConicData{T},ci::CI{<:MOI.AbstractFunction, MOI.Nonnegatives}) where T
+    return conic.f + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.Nonnegatives)
-    ci = cone.l
-    cone.l += MOI.dimension(s)
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Nonnegatives) where T
+    ci = conic.l
+    conic.l += MOI.dimension(s)
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, MOI.SecondOrderCone})
-    return cone.f + cone.l + ci.value
+function constroffset(conic::ConicData{T},
+                      ci::CI{<:MOI.AbstractFunction, MOI.SecondOrderCone}) where T
+    return conic.f + conic.l + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.SecondOrderCone)
-    push!(cone.qa, s.dimension)
-    ci = cone.q
-    cone.q += MOI.dimension(s)
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.SecondOrderCone) where T
+    push!(conic.qa, s.dimension)
+    ci = conic.q
+    conic.q += MOI.dimension(s)
     return ci
 end
-function constroffset(cone::ConeData,
+function constroffset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction,
-                             MOI.PositiveSemidefiniteConeTriangle})
-    return cone.f + cone.l + cone.q + ci.value
+                             MOI.PositiveSemidefiniteConeTriangle}) where T
+    return conic.f + conic.l + conic.q + ci.value
 end
-function _allocate_constraint(cone::ConeData, f,
-                              s::MOI.PositiveSemidefiniteConeTriangle)
-    push!(cone.sa, s.side_dimension)
-    ci = cone.s
-    cone.s += MOI.dimension(s)
+function _allocate_constraint(conic::ConicData{T}, f,
+                              s::MOI.PositiveSemidefiniteConeTriangle) where T
+    push!(conic.sa, s.side_dimension)
+    ci = conic.s
+    conic.s += MOI.dimension(s)
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone})
-    return cone.f + cone.l + cone.q + cone.s + ci.value
+function constroffset(conic::ConicData{T},
+                      ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone}) where T
+    return conic.f + conic.l + conic.q + conic.s + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.ExponentialCone)
-    ci = 3cone.ep
-    cone.ep += 1
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.ExponentialCone) where T
+    ci = 3 * conic.ep
+    conic.ep += 1
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone})
-    return cone.f + cone.l + cone.q + cone.s + 3cone.ep + ci.value
+function constroffset(conic::ConicData{T},
+                      ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone}) where T
+    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.DualExponentialCone)
-    ci = 3cone.ed
-    cone.ed += 1
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualExponentialCone) where T
+    ci = 3 * conic.ed
+    conic.ed += 1
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone})
-    return cone.f + cone.l + cone.q + cone.s + 3cone.ep + 3cone.ed + ci.value
+function constroffset(conic::ConicData{T},
+                      ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone}) where T
+    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.PowerCone)
-    ci = length(cone.p)
-    push!(cone.p, s.exponent)
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.PowerCone) where T
+    ci = length(conic.p)
+    push!(conic.p, s.exponent)
     return ci
 end
-function constroffset(cone::ConeData,
-                      ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone})
-    return cone.f + cone.l + cone.q + cone.s + 3cone.ep + 3cone.ed + ci.value
+function constroffset(conic::ConicData{T},
+                      ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone}) where T
+    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
 end
-function _allocate_constraint(cone::ConeData, f, s::MOI.DualPowerCone)
-    ci = length(cone.p)
+function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualPowerCone) where T
+    ci = length(conic.p)
     # SCS' convention: dual cones have a negative exponent.
-    push!(cone.p, -s.exponent)
+    push!(conic.p, -s.exponent)
     return ci
 end
-function constroffset(conic::ConicData, ci::CI)
-    return constroffset(conic.cone, ci::CI)
-end
-function __allocate_constraint(conic::ConicData, f::F, s::S) where {F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
-    return CI{F, S}(_allocate_constraint(conic.cone, f, s))
+function __allocate_constraint(conic::ConicData{T}, f::F, s::S) where {T, F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
+    return CI{F, S}(_allocate_constraint(conic, f, s))
 end
 
 # Vectorized length for matrix dimension n
@@ -182,7 +171,7 @@ end
 # rows: List of row indices
 # coef: List of corresponding coefficients
 # d: dimension of set
-# rev: if true, we unscale instead (e.g. divide by √2 instead of multiply for PSD cone)
+# rev: if true, we unscale instead (e.g. divide by √2 instead of multiply for PSD conic)
 function _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
     scaling = rev ? 1 / √2 : 1 * √2
     output = copy(coef)
@@ -211,7 +200,7 @@ coefficient(t::MOI.VectorAffineTerm) = coefficient(t.scalar_term)
 # When, the set is available, simply use MOI.dimension
 constrrows(s::MOI.AbstractVectorSet) = 1:MOI.dimension(s)
 # When only the index is available, use the `conic.ncone.nrows` field
-constrrows(conic::ConicData, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.AbstractVectorSet}) = 1:conic.cone.nrows[constroffset(conic, ci)]
+constrrows(conic::ConicData{T}, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.AbstractVectorSet}) where T = 1:conic.nrows[constroffset(conic, ci)]
 
 orderval(val, s) = val
 function orderval(val, s::MOI.PositiveSemidefiniteConeTriangle)
@@ -221,49 +210,40 @@ orderidx(idx, s) = idx
 function orderidx(idx, s::MOI.PositiveSemidefiniteConeTriangle)
     sympackedUtoLidx(idx, s.side_dimension)
 end
-function __load_constraint(conic::ConicData, ci::MOI.ConstraintIndex, f::MOI.VectorAffineFunction, s::MOI.AbstractVectorSet)
+function __load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.VectorAffineFunction, s::MOI.AbstractVectorSet) where {T}
     func = MOIU.canonical(f)
     I = Int[output_index(term) for term in func.terms]
     J = Int[variable_index_value(term) for term in func.terms]
-    V = Float64[-coefficient(term) for term in func.terms]
+    V = T[-coefficient(term) for term in func.terms]
     offset = constroffset(conic, ci)
     rows = constrrows(s)
-    conic.cone.nrows[offset] = length(rows)
+    conic.nrows[offset] = length(rows)
     i = offset .+ rows
     b = f.constants
-    # @warn ci
-    # @warn offset
-    # @warn rows
     if s isa MOI.PositiveSemidefiniteConeTriangle
         b = scalecoef(rows, b, s)
         b = sympackedUtoL(b, s.side_dimension)
         V = scalecoef(I, V, s)
         I = sympackedUtoLidx(I, s.side_dimension)
     end
-    # The SCS format is b - Ax ∈ cone
+    # The SCS format is b - Ax ∈ conic
     conic.data.b[i] = b
     append!(conic.data.I, offset .+ I)
     append!(conic.data.J, J)
     append!(conic.data.V, V)
 end
 
-function __allocate_variables(conic::ConicData, nvars::Integer)
-    conic.cone = ConeData()
-    VI.(1:nvars)
-end
-
-function __load_variables(conic::ConicData, nvars::Integer)
-    cone = conic.cone
-    m = cone.f + cone.l + cone.q + cone.s + 3cone.ep + 3cone.ed + 3length(cone.p)
+function __load_variables(conic::ConicData{T}, nvars::Integer) where T
+    m = conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + 3 * length(conic.p)
     I = Int[]
     J = Int[]
-    V = Float64[]
-    b = zeros(m)
-    c = zeros(nvars)
-    conic.data = ModelData(m, nvars, I, J, V, b, 0., c)
+    V = zeros(T, 0)
+    b = zeros(T, m)
+    c = zeros(T, nvars)
+    conic.data = ModelData(m, nvars, I, J, V, b, zero(T), c)
 end
 
-function __load(conic::ConicData, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction)
+function __load(conic::ConicData{T}, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction) where T
     c0 = Vector(sparsevec(variable_index_value.(f.terms), coefficient.(f.terms), conic.data.n))
     conic.data.objective_constant = f.constant
     conic.data.c = c0

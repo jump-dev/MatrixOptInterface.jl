@@ -240,14 +240,13 @@ struct ConicForm{T, AT<:AbstractMatrix{T}} <: AbstractConicForm{T}
 end
 
 """
-Convert a `MathOptInterface` model to `MatrixOptInterface`
+Convert a `MathOptInterface` model to `MatrixOptInterface` model
 """
-function getConicForm(model::M, con_idx) where {M <: MOI.AbstractOptimizer}
-    conic = ConicData()
+function getConicForm(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
+    conic = ConicData{T}()
 
     # 1st allocate variables and constraints
     N = MOI.get(model, MOI.NumberOfVariables())
-    __allocate_variables(conic, N)
     for con in con_idx
         func = MOI.get(model, MOI.ConstraintFunction(), con)
         set = MOI.get(model, MOI.ConstraintSet(), con)
@@ -276,7 +275,7 @@ function getConicForm(model::M, con_idx) where {M <: MOI.AbstractOptimizer}
         CONES_OFFSET[S] += cons_offset(set)
     end
     
-    # now SCS data shud be allocated
+    # now SCS data should be allocated
     A = sparse(
         conic.data.I, 
         conic.data.J, 
@@ -285,8 +284,8 @@ function getConicForm(model::M, con_idx) where {M <: MOI.AbstractOptimizer}
     b = conic.data.b 
 
     # extract `c`
-    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
-    __load(conic, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj)
+    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
+    __load(conic, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), obj)
     c = conic.data.c
 
     # fix optimization sense
@@ -303,7 +302,7 @@ function getConicForm(model::M, con_idx) where {M <: MOI.AbstractOptimizer}
     # extract cones
     cones = MOI.get(model, MOI.ConstraintSet(), cis)
 
-    return ConicForm{Float64, typeof(A)}(
+    return ConicForm{T, typeof(A)}(
         c, A, b, cones
     )
 end
