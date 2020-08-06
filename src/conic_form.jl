@@ -59,17 +59,20 @@ function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.Abst
 end
 
 # Computes conic dimensions
-function constroffset(conic::ConicData{T}, ci::CI{<:MOI.AbstractFunction, MOI.Zeros}) where T
+function constraint_offset(conic::ConicData{T}, ci::CI{<:MOI.AbstractFunction, MOI.Zeros}) where T
     return ci.value
 end
-#_allocate_constraint: Allocate indices for the constraint `f`-in-`s`
-# using information in `conic` and then update `conic`
+
+"""
+    _allocate_constraint
+Allocate indices for the constraint `f`-in-`s` using information in `conic` and then update `conic`.
+"""
 function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Zeros) where T
     ci = conic.f
     conic.f += MOI.dimension(s)
     return ci
 end
-function constroffset(conic::ConicData{T},ci::CI{<:MOI.AbstractFunction, MOI.Nonnegatives}) where T
+function constraint_offset(conic::ConicData{T},ci::CI{<:MOI.AbstractFunction, MOI.Nonnegatives}) where T
     return conic.f + ci.value
 end
 function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Nonnegatives) where T
@@ -77,7 +80,7 @@ function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Nonnegatives) where
     conic.l += MOI.dimension(s)
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction, MOI.SecondOrderCone}) where T
     return conic.f + conic.l + ci.value
 end
@@ -87,7 +90,7 @@ function _allocate_constraint(conic::ConicData{T}, f, s::MOI.SecondOrderCone) wh
     conic.q += MOI.dimension(s)
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction,
                              MOI.PositiveSemidefiniteConeTriangle}) where T
     return conic.f + conic.l + conic.q + ci.value
@@ -99,7 +102,7 @@ function _allocate_constraint(conic::ConicData{T}, f,
     conic.s += MOI.dimension(s)
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone}) where T
     return conic.f + conic.l + conic.q + conic.s + ci.value
 end
@@ -108,7 +111,7 @@ function _allocate_constraint(conic::ConicData{T}, f, s::MOI.ExponentialCone) wh
     conic.ep += 1
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone}) where T
     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + ci.value
 end
@@ -117,7 +120,7 @@ function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualExponentialCone
     conic.ed += 1
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone}) where T
     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
 end
@@ -126,7 +129,7 @@ function _allocate_constraint(conic::ConicData{T}, f, s::MOI.PowerCone) where T
     push!(conic.p, s.exponent)
     return ci
 end
-function constroffset(conic::ConicData{T},
+function constraint_offset(conic::ConicData{T},
                       ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone}) where T
     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
 end
@@ -166,12 +169,15 @@ function sympackedUtoLidx(x::AbstractVector{<:Integer}, n)
     y
 end
 
-
-# Scale coefficients depending on rows index
-# rows: List of row indices
-# coef: List of corresponding coefficients
-# d: dimension of set
-# rev: if true, we unscale instead (e.g. divide by √2 instead of multiply for PSD conic)
+"""
+    _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
+    
+Scale coefficients depending on rows index
+rows: List of row indices
+coef: List of corresponding coefficients
+d: dimension of set
+rev: if true, we unscale instead (e.g. divide by √2 instead of multiply for PSD conic)
+"""
 function _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
     scaling = rev ? 1 / √2 : 1 * √2
     output = copy(coef)
@@ -200,7 +206,7 @@ coefficient(t::MOI.VectorAffineTerm) = coefficient(t.scalar_term)
 # When, the set is available, simply use MOI.dimension
 constrrows(s::MOI.AbstractVectorSet) = 1:MOI.dimension(s)
 # When only the index is available, use the `conic.ncone.nrows` field
-constrrows(conic::ConicData{T}, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.AbstractVectorSet}) where T = 1:conic.nrows[constroffset(conic, ci)]
+constrrows(conic::ConicData{T}, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.AbstractVectorSet}) where T = 1:conic.nrows[constraint_offset(conic, ci)]
 
 orderval(val, s) = val
 function orderval(val, s::MOI.PositiveSemidefiniteConeTriangle)
@@ -215,7 +221,7 @@ function __load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.
     I = Int[output_index(term) for term in func.terms]
     J = Int[variable_index_value(term) for term in func.terms]
     V = T[-coefficient(term) for term in func.terms]
-    offset = constroffset(conic, ci)
+    offset = constraint_offset(conic, ci)
     rows = constrrows(s)
     conic.nrows[offset] = length(rows)
     i = offset .+ rows
