@@ -150,7 +150,7 @@ sympackeddim(n) = div(isqrt(1+8n) - 1, 2)
 trimap(i::Integer, j::Integer) = i < j ? trimap(j, i) : div((i-1)*i, 2) + j
 trimapL(i::Integer, j::Integer, n::Integer) = i < j ? trimapL(j, i, n) : i + div((2n-j) * (j-1), 2)
 function _sympackedto(x, n, mapfrom, mapto)
-    @assert length(x) == sympackedlen(n)
+    length(x) == sympackedlen(n) || throw(DimensionMismatch("error message on dimensions"))
     y = similar(x)
     for i in 1:n, j in 1:i
         y[mapto(i, j)] = x[mapfrom(i, j)]
@@ -171,7 +171,7 @@ end
 
 """
     _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
-    
+
 Scale coefficients depending on rows index
 rows: List of row indices
 coef: List of corresponding coefficients
