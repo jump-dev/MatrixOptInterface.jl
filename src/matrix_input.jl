@@ -230,12 +230,12 @@ struct MILP{T, LP<:AbstractLPForm{T}}
     variable_type::Vector{VariableType}
 end
 
-struct ConicForm{T, AT<:AbstractMatrix{T}} <: AbstractConicForm{T}
+struct ConicForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractConicForm{T}
     # assuming minimization for now
     # direction::MOI.OptimizationSense 
-    c::Vector{T}
+    c::VT
     A::AT
-    b::Vector{T}
+    b::VT
     cones::Vector{<: MOI.AbstractVectorSet}
 end
 
@@ -302,7 +302,7 @@ function getConicForm(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractO
     # extract cones
     cones = MOI.get(model, MOI.ConstraintSet(), cis)
 
-    return ConicForm{T, typeof(A)}(
+    return ConicForm{T, typeof(A), typeof(b)}(
         c, A, b, cones
     )
 end
