@@ -102,43 +102,43 @@ function _allocate_constraint(conic::ConicData{T}, f,
     conic.s += MOI.dimension(s)
     return ci
 end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone}) where T
-    return conic.f + conic.l + conic.q + conic.s + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.ExponentialCone) where T
-    ci = 3 * conic.ep
-    conic.ep += 1
-    return ci
-end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone}) where T
-    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualExponentialCone) where T
-    ci = 3 * conic.ed
-    conic.ed += 1
-    return ci
-end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone}) where T
-    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.PowerCone) where T
-    ci = length(conic.p)
-    push!(conic.p, s.exponent)
-    return ci
-end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone}) where T
-    return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualPowerCone) where T
-    ci = length(conic.p)
-    # SCS' convention: dual cones have a negative exponent.
-    push!(conic.p, -s.exponent)
-    return ci
-end
+# function constraint_offset(conic::ConicData{T},
+#                       ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone}) where T
+#     return conic.f + conic.l + conic.q + conic.s + ci.value
+# end
+# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.ExponentialCone) where T
+#     ci = 3 * conic.ep
+#     conic.ep += 1
+#     return ci
+# end
+# function constraint_offset(conic::ConicData{T},
+#                       ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone}) where T
+#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + ci.value
+# end
+# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualExponentialCone) where T
+#     ci = 3 * conic.ed
+#     conic.ed += 1
+#     return ci
+# end
+# function constraint_offset(conic::ConicData{T},
+#                       ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone}) where T
+#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
+# end
+# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.PowerCone) where T
+#     ci = length(conic.p)
+#     push!(conic.p, s.exponent)
+#     return ci
+# end
+# function constraint_offset(conic::ConicData{T},
+#                       ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone}) where T
+#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
+# end
+# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualPowerCone) where T
+#     ci = length(conic.p)
+#     # SCS' convention: dual cones have a negative exponent.
+#     push!(conic.p, -s.exponent)
+#     return ci
+# end
 function __allocate_constraint(conic::ConicData{T}, f::F, s::S) where {T, F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
     return CI{F, S}(_allocate_constraint(conic, f, s))
 end
