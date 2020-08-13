@@ -1,3 +1,23 @@
+mutable struct ConicForm{T, AT, VT, C} <: MOI.ModelLike
+    num_rows::Vector{Int}
+    dimension::Dict{Int, Int}
+    sense::MOI.OptimizationSense
+    objective_constant::T # The objective
+    A::Union{Nothing, AT} # The constraints
+    b::VT          # `b - Ax in cones`
+    c::VT          # `sense c'x + objective_constant`
+    cone_types::C
+
+    function ConicForm{T, AT, VT}(cone_types) where {T, AT, VT}
+        model = new{T, AT, VT, typeof(cone_types)}()
+        model.cone_types = cone_types
+        model.num_rows = zeros(Int, length(cone_types))
+        model.dimension = Dict{Int, Int}()
+        model.A = nothing
+        return model
+    end
+end
+
 mutable struct ModelData{T}
     m::Int # Number of rows/constraints
     n::Int # Number of cols/variables
@@ -216,7 +236,7 @@ orderidx(idx, s) = idx
 function orderidx(idx, s::MOI.PositiveSemidefiniteConeTriangle)
     sympackedUtoLidx(idx, s.side_dimension)
 end
-function __load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.VectorAffineFunction, s::MOI.AbstractVectorSet) where {T}
+function _load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.VectorAffineFunction, s::MOI.AbstractVectorSet) where {T}
     func = MOIU.canonical(f)
     I = Int[output_index(term) for term in func.terms]
     J = Int[variable_index_value(term) for term in func.terms]
@@ -239,7 +259,7 @@ function __load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.
     append!(conic.data.V, V)
 end
 
-function __load_variables(conic::ConicData{T}, nvars::Integer) where T
+function _load_variables(conic::ConicData{T}, nvars::Integer) where T
     m = conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + 3 * length(conic.p)
     I = Int[]
     J = Int[]
@@ -249,8 +269,77 @@ function __load_variables(conic::ConicData{T}, nvars::Integer) where T
     conic.data = ModelData(m, nvars, I, J, V, b, zero(T), c)
 end
 
-function __load(conic::ConicData{T}, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction) where T
+function _load(conic::ConicData{T}, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction) where T
     c0 = Vector(sparsevec(variable_index_value.(f.terms), coefficient.(f.terms), conic.data.n))
     conic.data.objective_constant = f.constant
     conic.data.c = c0
+end
+
+
+function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
+    conic = ConicData{T}()
+
+    # 1st allocate variables and constraints
+    N = MOI.get(model, MOI.NumberOfVariables())
+    for con in con_idx
+        func = MOI.get(model, MOI.ConstraintFunction(), con)
+        set = MOI.get(model, MOI.ConstraintSet(), con)
+        F = typeof(func)
+        S = typeof(set)
+        __allocate_constraint(conic, func, set)
+    end
+
+    _load_variables(conic, N)
+    
+    CONES_OFFSET = Dict(
+        MOI.Zeros => 0,
+        MOI.Nonnegatives => 0,
+        MOI.SecondOrderCone => 0,
+        MOI.PositiveSemidefiniteConeTriangle => 0,
+        MOI.ExponentialCone => 0, 
+        MOI.DualExponentialCone => 0
+    )
+
+    for con in con_idx
+        func = MOI.get(model, MOI.ConstraintFunction(), con)
+        set = MOI.get(model, MOI.ConstraintSet(), con)
+        F = typeof(func)
+        S = typeof(set)
+        _load_constraint(conic, CI{F, S}(CONES_OFFSET[S]), func, set)
+        CONES_OFFSET[S] += cons_offset(set)
+    end
+    
+    # now SCS data should be allocated
+    A = sparse(
+        conic.data.I, 
+        conic.data.J, 
+        conic.data.V 
+    )
+    b = conic.data.b 
+
+    # extract `c`
+    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
+    _load(conic, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), obj)
+    c = conic.data.c
+
+    # fix optimization sense
+    if MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE
+        c = -c
+    end
+
+    # reorder constraints
+    cis = sort(
+        con_idx, 
+        by = x->CONES[typeof(MOI.get(model, MOI.ConstraintSet(), x))]
+    )
+
+    # extract cones
+    cones = MOI.get(model, MOI.ConstraintSet(), cis)
+
+    conic_form = ConicForm{T, typeof(A), typeof(b)}(cones)
+    conic_form.A = A
+    conic_form.b = b
+    conic_form.c = c
+
+    return conic_form
 end

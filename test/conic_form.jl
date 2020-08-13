@@ -54,7 +54,7 @@ CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
         MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.([objXcoefs; 1.0], [X[objXidx]; x[1]]), 0.0))
         MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
-        MatModel = MatOI.getConicForm(Float64, model, [cX; cx; c1; c2])
+        MatModel = MatOI.get_conic_form(Float64, model, [cX; cx; c1; c2])
 
         @test MatModel.c' ≈ [2. 2. 2. 0. 2. 2. 1. 0. 0.]
         @test MatModel.b' ≈ [-1.  -0.5  0.   0.   0.   0.   0.   0.   0.   0.   0. ]
@@ -124,7 +124,7 @@ end
         MOI.set(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x[7])], 0.0))
         MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
 
-        MatModel = MatOI.getConicForm(Float64, model, [c1; c2; c3; c4])
+        MatModel = MatOI.get_conic_form(Float64, model, [c1; c2; c3; c4])
 
         @test MatModel.c ≈ [-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -1.0]
         @test MatModel.b ≈ [0.0, 10.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, 0.0, 0.0, 0.0]
@@ -172,6 +172,6 @@ end
 
 @testset "Testing minor utilities" begin
     # vector, matrix dimensions
-    i = rand(Int64) % 100    
+    i = rand(10:100)
     @test MatOI.sympackedlen(MatOI.sympackeddim(i)) <= i
 end

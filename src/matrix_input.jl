@@ -1,5 +1,4 @@
 abstract type AbstractLPForm{T} <: MOI.ModelLike end
-abstract type AbstractConicForm{T} <: MOI.ModelLike end
 
 # FIXME Taken from Polyhedra.jl, we should maybe move this to MOIU
 structural_nonzero_indices(a::SparseArrays.SparseVector) = SparseArrays.nonzeroinds(a)
@@ -228,81 +227,4 @@ end
 struct MILP{T, LP<:AbstractLPForm{T}}
     lp::LP
     variable_type::Vector{VariableType}
-end
-
-struct ConicForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractConicForm{T}
-    # assuming minimization for now
-    # direction::MOI.OptimizationSense 
-    c::VT
-    A::AT
-    b::VT
-    cones::Vector{<: MOI.AbstractVectorSet}
-end
-
-"""
-Convert a `MathOptInterface` model to `MatrixOptInterface` model
-"""
-function getConicForm(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
-    conic = ConicData{T}()
-
-    # 1st allocate variables and constraints
-    N = MOI.get(model, MOI.NumberOfVariables())
-    for con in con_idx
-        func = MOI.get(model, MOI.ConstraintFunction(), con)
-        set = MOI.get(model, MOI.ConstraintSet(), con)
-        F = typeof(func)
-        S = typeof(set)
-        __allocate_constraint(conic, func, set)
-    end
-
-    __load_variables(conic, N)
-    
-    CONES_OFFSET = Dict(
-        MOI.Zeros => 0,
-        MOI.Nonnegatives => 0,
-        MOI.SecondOrderCone => 0,
-        MOI.PositiveSemidefiniteConeTriangle => 0,
-        MOI.ExponentialCone => 0, 
-        MOI.DualExponentialCone => 0
-    )
-
-    for con in con_idx
-        func = MOI.get(model, MOI.ConstraintFunction(), con)
-        set = MOI.get(model, MOI.ConstraintSet(), con)
-        F = typeof(func)
-        S = typeof(set)
-        __load_constraint(conic, CI{F, S}(CONES_OFFSET[S]), func, set)
-        CONES_OFFSET[S] += cons_offset(set)
-    end
-    
-    # now SCS data should be allocated
-    A = sparse(
-        conic.data.I, 
-        conic.data.J, 
-        conic.data.V 
-    )
-    b = conic.data.b 
-
-    # extract `c`
-    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
-    __load(conic, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), obj)
-    c = conic.data.c
-
-    # fix optimization sense
-    if MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE
-        c = -c
-    end
-
-    # reorder constraints
-    cis = sort(
-        con_idx, 
-        by = x->CONES[typeof(MOI.get(model, MOI.ConstraintSet(), x))]
-    )
-
-    # extract cones
-    cones = MOI.get(model, MOI.ConstraintSet(), cis)
-
-    return ConicForm{T, typeof(A), typeof(b)}(
-        c, A, b, cones
-    )
 end
