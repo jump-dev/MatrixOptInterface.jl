@@ -33,40 +33,18 @@ cons_offset(conic::MOI.Nonnegatives) = conic.dimension
 cons_offset(conic::MOI.SecondOrderCone) = conic.dimension
 cons_offset(conic::MOI.PositiveSemidefiniteConeTriangle) = Int64((conic.side_dimension*(conic.side_dimension+1))/2)
 
-function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.AbstractVectorSet}) where {T}
-    i=0
-    s = Array{T}[]
-    y = Array{T}[]
-    for conic in cones
-        offset = cons_offset(conic)
-        push!(s, _s[i.+(1:offset)])
-        push!(y, _y[i.+(1:offset)])
-        i += offset
-    end
-    return s, y
-end
-
-function sympackedUtoLidx(x::AbstractVector{<:Integer}, n)
-    y = similar(x)
-    map = sympackedLtoU(1:sympackedlen(n), n)
-    for i in eachindex(y)
-        y[i] = map[x[i]]
-    end
-    y
-end
-
-output_index(t::MOI.VectorAffineTerm) = t.output_index
-coefficient(t::MOI.ScalarAffineTerm) = t.coefficient
-coefficient(t::MOI.VectorAffineTerm) = coefficient(t.scalar_term)
-
-orderval(val, s) = val
-function orderval(val, s::MOI.PositiveSemidefiniteConeTriangle)
-    sympackedUtoL(val, s.side_dimension)
-end
-orderidx(idx, s) = idx
-function orderidx(idx, s::MOI.PositiveSemidefiniteConeTriangle)
-    sympackedUtoLidx(idx, s.side_dimension)
-end
+# function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.AbstractVectorSet}) where {T}
+#     i=0
+#     s = Array{T}[]
+#     y = Array{T}[]
+#     for conic in cones
+#         offset = cons_offset(conic)
+#         push!(s, _s[i.+(1:offset)])
+#         push!(y, _y[i.+(1:offset)])
+#         i += offset
+#     end
+#     return s, y
+# end
 
 function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
     # reorder constraints
