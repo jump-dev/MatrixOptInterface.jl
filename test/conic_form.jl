@@ -58,28 +58,28 @@ CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
 
         @test MatModel.c' ≈ [2. 2. 2. 0. 2. 2. 1. 0. 0.]
         @test MatModel.b' ≈ [-1.  -0.5  0.   0.   0.   0.   0.   0.   0.   0.   0. ]
-        A = MatModel.A
-        @test A[1, 1] ≈	-1.0 
-        @test A[2, 1] ≈	-1.0
-        @test A[6, 1] ≈	-1.0
-        @test A[2, 2] ≈	-2.0
-        @test A[7, 2] ≈	-1.41421 atol=ATOL rtol=RTOL
-        @test A[1, 3] ≈	-1.0
-        @test A[2, 3] ≈	-1.0
-        @test A[9, 3] ≈	-1.0
-        @test A[2, 4] ≈	-2.0
-        @test A[8, 4] ≈	-1.41421 atol=ATOL rtol=RTOL
-        @test A[2, 5] ≈	-2.0
-        @test A[10, 5] ≈ -1.41421 atol=ATOL rtol=RTOL
-        @test A[1, 6] ≈	-1.0
-        @test A[2, 6] ≈	-1.0
-        @test A[11, 6] ≈ -1.0
-        @test A[1, 7] ≈	-1.0
-        @test A[3, 7] ≈	-1.0
-        @test A[2, 8] ≈	-1.0
-        @test A[4, 8] ≈	-1.0
-        @test A[2, 9] ≈	-1.0
-        @test A[5, 9] ≈	-1.0
+        @test MatModel.A.nzval ≈ [-1.0, -1.0, -1.0, -2.0, -1.41421, -1.0, -1.0, -1.0, -2.0, -1.41421, -2.0, -1.41421, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0] atol=ATOL rtol=RTOL
+        # @test A[1, 1] ≈	-1.0 
+        # @test A[2, 1] ≈	-1.0
+        # @test A[6, 1] ≈	-1.0
+        # @test A[2, 2] ≈	-2.0
+        # @test A[7, 2] ≈	-1.41421 atol=ATOL rtol=RTOL
+        # @test A[1, 3] ≈	-1.0
+        # @test A[2, 3] ≈	-1.0
+        # @test A[9, 3] ≈	-1.0
+        # @test A[2, 4] ≈	-2.0
+        # @test A[8, 4] ≈	-1.41421 atol=ATOL rtol=RTOL
+        # @test A[2, 5] ≈	-2.0
+        # @test A[10, 5] ≈ -1.41421 atol=ATOL rtol=RTOL
+        # @test A[1, 6] ≈	-1.0
+        # @test A[2, 6] ≈	-1.0
+        # @test A[11, 6] ≈ -1.0
+        # @test A[1, 7] ≈	-1.0
+        # @test A[3, 7] ≈	-1.0
+        # @test A[2, 8] ≈	-1.0
+        # @test A[4, 8] ≈	-1.0
+        # @test A[2, 9] ≈	-1.0
+        # @test A[5, 9] ≈	-1.0
     end
 end
 
@@ -128,33 +128,33 @@ end
 
         @test MatModel.c ≈ [-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -1.0]
         @test MatModel.b ≈ [0.0, 10.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, 0.0, 0.0, 0.0]
-        A = MatModel.A
-        @test A[2 , 1]  ≈  1.0
-        @test A[3 , 1]  ≈  -1.0
-        @test A[9 , 1]  ≈  -0.45
-        @test A[10, 1]  ≈  0.45
-        @test A[11, 1]  ≈  -0.45
-        @test A[2 , 2]  ≈  1.0
-        @test A[4 , 2]  ≈  -1.0
-        @test A[9 , 2]  ≈  -0.8
-        @test A[10, 2]  ≈  0.318198 atol=ATOL rtol=RTOL
-        @test A[11, 2]  ≈  -0.1
-        @test A[2 , 3]  ≈  1.0
-        @test A[5 , 3]  ≈  -1.0
-        @test A[9 , 3]  ≈  -0.9
-        @test A[2 , 4]  ≈  1.0
-        @test A[6 , 4]  ≈  -1.0
-        @test A[9 , 4]  ≈  -0.225
-        @test A[2 , 5]  ≈  1.0
-        @test A[7 , 5]  ≈  -1.0
-        @test A[9 , 5]  ≈  -0.1125
-        @test A[10, 5]  ≈  0.1125
-        @test A[11, 5]  ≈  -0.1125
-        @test A[2 , 6]  ≈  1.0
-        @test A[8 , 6]  ≈  -1.0
-        @test A[11, 6]  ≈  -0.225
-        @test A[9 , 7]  ≈  1.0
-        @test A[11, 7]  ≈  1.0
+        @test MatModel.A.nzval ≈ [1.0, -1.0, -0.45, 0.45, -0.45, 1.0, -1.0, -0.8, 0.318198, -0.1, 1.0, -1.0, -0.9, 1.0, -1.0, -0.225, 1.0, -1.0, -0.1125, 0.1125, -0.1125, 1.0, -1.0, -0.225, 1.0, 1.0] atol=ATOL rtol=RTOL
+        # @test A[2 , 1]  ≈  1.0
+        # @test A[3 , 1]  ≈  -1.0
+        # @test A[9 , 1]  ≈  -0.45
+        # @test A[10, 1]  ≈  0.45
+        # @test A[11, 1]  ≈  -0.45
+        # @test A[2 , 2]  ≈  1.0
+        # @test A[4 , 2]  ≈  -1.0
+        # @test A[9 , 2]  ≈  -0.8
+        # @test A[10, 2]  ≈  0.318198 atol=ATOL rtol=RTOL
+        # @test A[11, 2]  ≈  -0.1
+        # @test A[2 , 3]  ≈  1.0
+        # @test A[5 , 3]  ≈  -1.0
+        # @test A[9 , 3]  ≈  -0.9
+        # @test A[2 , 4]  ≈  1.0
+        # @test A[6 , 4]  ≈  -1.0
+        # @test A[9 , 4]  ≈  -0.225
+        # @test A[2 , 5]  ≈  1.0
+        # @test A[7 , 5]  ≈  -1.0
+        # @test A[9 , 5]  ≈  -0.1125
+        # @test A[10, 5]  ≈  0.1125
+        # @test A[11, 5]  ≈  -0.1125
+        # @test A[2 , 6]  ≈  1.0
+        # @test A[8 , 6]  ≈  -1.0
+        # @test A[11, 6]  ≈  -0.225
+        # @test A[9 , 7]  ≈  1.0
+        # @test A[11, 7]  ≈  1.0
     end
 end
 

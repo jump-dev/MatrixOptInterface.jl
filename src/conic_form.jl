@@ -18,35 +18,6 @@ mutable struct ConicForm{T, AT, VT, C} <: MOI.ModelLike
     end
 end
 
-mutable struct ModelData{T}
-    m::Int # Number of rows/constraints
-    n::Int # Number of cols/variables
-    I::Vector{Int} # List of rows
-    J::Vector{Int} # List of cols
-    V::Vector{T} # List of coefficients
-    b::Vector{T} # constants
-    objective_constant::T # The objective is min c'x + objective_constant
-    c::Vector{T}
-end
-
-mutable struct ConicData{T}
-    f::Int # number of linear equality constraints
-    l::Int # length of LP conic
-    q::Int # length of SOC conic
-    qa::Vector{Int} # array of second-order conic constraints
-    s::Int # length of SD conic
-    sa::Vector{Int} # array of semi-definite constraints
-    ep::Int # number of primal exponential conic triples
-    ed::Int # number of dual exponential conic triples
-    p::Vector{Float64} # array of power conic params
-    nrows::Dict{Int, Int} # The number of rows of each vector sets, this is used by `constrrows` to recover the number of rows used by a constraint when getting `ConstraintPrimal` or `ConstraintDual`
-    data::Union{Nothing, ModelData{T}}
-
-    function ConicData{T}() where T
-        return new{T}(0, 0, 0, Int[], 0, Int[], 0, 0, Float64[], Dict{Int, Int}(), nothing)
-    end
-end
-
 # The ordering of CONES matches SCS
 const CONES = Dict(
     MOI.Zeros => 1,
@@ -56,9 +27,6 @@ const CONES = Dict(
     MOI.ExponentialCone => 5, 
     MOI.DualExponentialCone => 6
 )
-
-const CI = MOI.ConstraintIndex
-const VI = MOI.VariableIndex
 
 cons_offset(conic::MOI.Zeros) = conic.dimension
 cons_offset(conic::MOI.Nonnegatives) = conic.dimension
@@ -78,108 +46,6 @@ function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.Abst
     return s, y
 end
 
-# Computes conic dimensions
-function constraint_offset(conic::ConicData{T}, ci::CI{<:MOI.AbstractFunction, MOI.Zeros}) where T
-    return ci.value
-end
-
-"""
-    _allocate_constraint
-Allocate indices for the constraint `f`-in-`s` using information in `conic` and then update `conic`.
-"""
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Zeros) where T
-    ci = conic.f
-    conic.f += MOI.dimension(s)
-    return ci
-end
-function constraint_offset(conic::ConicData{T},ci::CI{<:MOI.AbstractFunction, MOI.Nonnegatives}) where T
-    return conic.f + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.Nonnegatives) where T
-    ci = conic.l
-    conic.l += MOI.dimension(s)
-    return ci
-end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction, MOI.SecondOrderCone}) where T
-    return conic.f + conic.l + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f, s::MOI.SecondOrderCone) where T
-    push!(conic.qa, s.dimension)
-    ci = conic.q
-    conic.q += MOI.dimension(s)
-    return ci
-end
-function constraint_offset(conic::ConicData{T},
-                      ci::CI{<:MOI.AbstractFunction,
-                             MOI.PositiveSemidefiniteConeTriangle}) where T
-    return conic.f + conic.l + conic.q + ci.value
-end
-function _allocate_constraint(conic::ConicData{T}, f,
-                              s::MOI.PositiveSemidefiniteConeTriangle) where T
-    push!(conic.sa, s.side_dimension)
-    ci = conic.s
-    conic.s += MOI.dimension(s)
-    return ci
-end
-# function constraint_offset(conic::ConicData{T},
-#                       ci::CI{<:MOI.AbstractFunction, MOI.ExponentialCone}) where T
-#     return conic.f + conic.l + conic.q + conic.s + ci.value
-# end
-# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.ExponentialCone) where T
-#     ci = 3 * conic.ep
-#     conic.ep += 1
-#     return ci
-# end
-# function constraint_offset(conic::ConicData{T},
-#                       ci::CI{<:MOI.AbstractFunction, MOI.DualExponentialCone}) where T
-#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + ci.value
-# end
-# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualExponentialCone) where T
-#     ci = 3 * conic.ed
-#     conic.ed += 1
-#     return ci
-# end
-# function constraint_offset(conic::ConicData{T},
-#                       ci::CI{<:MOI.AbstractFunction, <:MOI.PowerCone}) where T
-#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
-# end
-# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.PowerCone) where T
-#     ci = length(conic.p)
-#     push!(conic.p, s.exponent)
-#     return ci
-# end
-# function constraint_offset(conic::ConicData{T},
-#                       ci::CI{<:MOI.AbstractFunction, <:MOI.DualPowerCone}) where T
-#     return conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + ci.value
-# end
-# function _allocate_constraint(conic::ConicData{T}, f, s::MOI.DualPowerCone) where T
-#     ci = length(conic.p)
-#     # SCS' convention: dual cones have a negative exponent.
-#     push!(conic.p, -s.exponent)
-#     return ci
-# end
-function __allocate_constraint(conic::ConicData{T}, f::F, s::S) where {T, F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
-    return CI{F, S}(_allocate_constraint(conic, f, s))
-end
-
-# Vectorized length for matrix dimension n
-sympackedlen(n) = div(n*(n+1), 2)
-# Matrix dimension for vectorized length n
-sympackeddim(n) = div(isqrt(1+8n) - 1, 2)
-trimap(i::Integer, j::Integer) = i < j ? trimap(j, i) : div((i-1)*i, 2) + j
-trimapL(i::Integer, j::Integer, n::Integer) = i < j ? trimapL(j, i, n) : i + div((2n-j) * (j-1), 2)
-function _sympackedto(x, n, mapfrom, mapto)
-    length(x) == sympackedlen(n) || throw(DimensionMismatch("error message on dimensions"))
-    y = similar(x)
-    for i in 1:n, j in 1:i
-        y[mapto(i, j)] = x[mapfrom(i, j)]
-    end
-    y
-end
-sympackedLtoU(x, n=sympackeddim(length(x))) = _sympackedto(x, n, (i, j) -> trimapL(i, j, n), trimap)
-sympackedUtoL(x, n=sympackeddim(length(x))) = _sympackedto(x, n, trimap, (i, j) -> trimapL(i, j, n))
-
 function sympackedUtoLidx(x::AbstractVector{<:Integer}, n)
     y = similar(x)
     map = sympackedLtoU(1:sympackedlen(n), n)
@@ -189,44 +55,9 @@ function sympackedUtoLidx(x::AbstractVector{<:Integer}, n)
     y
 end
 
-"""
-    _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
-
-Scale coefficients depending on rows index
-rows: List of row indices
-coef: List of corresponding coefficients
-d: dimension of set
-rev: if true, we unscale instead (e.g. divide by √2 instead of multiply for PSD conic)
-"""
-function _scalecoef(rows::AbstractVector{<: Integer}, coef::Vector{Float64}, d::Integer, rev::Bool)
-    scaling = rev ? 1 / √2 : 1 * √2
-    output = copy(coef)
-    for i in 1:length(output)
-        # See https://en.wikipedia.org/wiki/Triangular_number#Triangular_roots_and_tests_for_triangular_numbers
-        val = 8 * rows[i] + 1
-        is_diagonal_index = isqrt(val)^2 == val
-        if !is_diagonal_index
-            output[i] *= scaling
-        end
-    end
-    return output
-end
-
-# Unscale the coefficients in `coef` with respective rows in `rows` for a set `s`
-scalecoef(rows, coef, s) = _scalecoef(rows, coef, MOI.dimension(s), false)
-# Unscale the coefficients in `coef` with respective rows in `rows` for a set of type `S` with dimension `d`
-unscalecoef(rows, coef, d) = _scalecoef(rows, coef, sympackeddim(d), true)
-
 output_index(t::MOI.VectorAffineTerm) = t.output_index
-variable_index_value(t::MOI.ScalarAffineTerm) = t.variable_index.value
-variable_index_value(t::MOI.VectorAffineTerm) = variable_index_value(t.scalar_term)
 coefficient(t::MOI.ScalarAffineTerm) = t.coefficient
 coefficient(t::MOI.VectorAffineTerm) = coefficient(t.scalar_term)
-# constrrows: Recover the number of rows used by each constraint.
-# When, the set is available, simply use MOI.dimension
-constrrows(s::MOI.AbstractVectorSet) = 1:MOI.dimension(s)
-# When only the index is available, use the `conic.ncone.nrows` field
-constrrows(conic::ConicData{T}, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.AbstractVectorSet}) where T = 1:conic.nrows[constraint_offset(conic, ci)]
 
 orderval(val, s) = val
 function orderval(val, s::MOI.PositiveSemidefiniteConeTriangle)
@@ -236,97 +67,8 @@ orderidx(idx, s) = idx
 function orderidx(idx, s::MOI.PositiveSemidefiniteConeTriangle)
     sympackedUtoLidx(idx, s.side_dimension)
 end
-function _load_constraint(conic::ConicData{T}, ci::MOI.ConstraintIndex, f::MOI.VectorAffineFunction, s::MOI.AbstractVectorSet) where {T}
-    func = MOIU.canonical(f)
-    I = Int[output_index(term) for term in func.terms]
-    J = Int[variable_index_value(term) for term in func.terms]
-    V = T[-coefficient(term) for term in func.terms]
-    offset = constraint_offset(conic, ci)
-    rows = constrrows(s)
-    conic.nrows[offset] = length(rows)
-    i = offset .+ rows
-    b = f.constants
-    if s isa MOI.PositiveSemidefiniteConeTriangle
-        b = scalecoef(rows, b, s)
-        b = sympackedUtoL(b, s.side_dimension)
-        V = scalecoef(I, V, s)
-        I = sympackedUtoLidx(I, s.side_dimension)
-    end
-    # The SCS format is b - Ax ∈ conic
-    conic.data.b[i] = b
-    append!(conic.data.I, offset .+ I)
-    append!(conic.data.J, J)
-    append!(conic.data.V, V)
-end
-
-function _load_variables(conic::ConicData{T}, nvars::Integer) where T
-    m = conic.f + conic.l + conic.q + conic.s + 3 * conic.ep + 3 * conic.ed + 3 * length(conic.p)
-    I = Int[]
-    J = Int[]
-    V = zeros(T, 0)
-    b = zeros(T, m)
-    c = zeros(T, nvars)
-    conic.data = ModelData(m, nvars, I, J, V, b, zero(T), c)
-end
-
-function _load(conic::ConicData{T}, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction) where T
-    c0 = Vector(sparsevec(variable_index_value.(f.terms), coefficient.(f.terms), conic.data.n))
-    conic.data.objective_constant = f.constant
-    conic.data.c = c0
-end
-
 
 function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
-    conic = ConicData{T}()
-
-    # 1st allocate variables and constraints
-    N = MOI.get(model, MOI.NumberOfVariables())
-    for con in con_idx
-        func = MOI.get(model, MOI.ConstraintFunction(), con)
-        set = MOI.get(model, MOI.ConstraintSet(), con)
-        F = typeof(func)
-        S = typeof(set)
-        __allocate_constraint(conic, func, set)
-    end
-
-    _load_variables(conic, N)
-    
-    CONES_OFFSET = Dict(
-        MOI.Zeros => 0,
-        MOI.Nonnegatives => 0,
-        MOI.SecondOrderCone => 0,
-        MOI.PositiveSemidefiniteConeTriangle => 0,
-        MOI.ExponentialCone => 0, 
-        MOI.DualExponentialCone => 0
-    )
-
-    for con in con_idx
-        func = MOI.get(model, MOI.ConstraintFunction(), con)
-        set = MOI.get(model, MOI.ConstraintSet(), con)
-        F = typeof(func)
-        S = typeof(set)
-        _load_constraint(conic, CI{F, S}(CONES_OFFSET[S]), func, set)
-        CONES_OFFSET[S] += cons_offset(set)
-    end
-    
-    # now SCS data should be allocated
-    A = sparse(
-        conic.data.I, 
-        conic.data.J, 
-        conic.data.V 
-    )
-    b = conic.data.b 
-
-    # extract `c`
-    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
-    _load(conic, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), obj)
-    c = conic.data.c
-
-    # fix optimization sense
-    if MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE
-        c = -c
-    end
-
     # reorder constraints
     cis = sort(
         con_idx, 
@@ -334,12 +76,221 @@ function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.Abstrac
     )
 
     # extract cones
-    cones = MOI.get(model, MOI.ConstraintSet(), cis)
+    cones = typeof.(MOI.get(model, MOI.ConstraintSet(), cis))
 
-    conic_form = ConicForm{T, typeof(A), typeof(b)}(cones)
-    conic_form.A = A
-    conic_form.b = b
-    conic_form.c = c
+    conic = ConicForm{T, SparseMatrixCSRtoCSC{Int64}, Array{T, 1}}(Tuple(cones))
 
-    return conic_form
+    idxmap = MOI.copy_to(conic, model)
+
+    # fix optimization sense
+    if MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE
+        conic.c = -conic.c
+    end
+
+    return conic
+end
+
+MOI.is_empty(model::ConicForm) = model.A === nothing
+function MOI.empty!(model::ConicForm{T}) where T
+    empty!(model.dimension)
+    fill!(model.num_rows, 0)
+    model.A = nothing
+    model.sense = MOI.FEASIBILITY_SENSE
+    model.objective_constant = zero(T)
+end
+
+function _first(::Type{S}, idx::Int, ::Type{S}, args::Vararg{Type, N}) where {S, N}
+    return idx
+end
+function _first(::Type{S}, idx::Int, ::Type, args::Vararg{Type, N}) where {S, N}
+    return _first(S, idx + 1, args...)
+end
+_first(::Type, idx::Int) = nothing
+
+_findfirst(::Type{S}, sets::Tuple) where {S} = _first(S, 1, sets...)
+
+function MOI.supports_constraint(
+    model::ConicForm,
+    ::Type{MOI.VectorAffineFunction{Float64}},
+    ::Type{S}) where S <: MOI.AbstractVectorSet
+    return _findfirst(S, model.cone_types) !== nothing
+end
+
+function _allocate_variables(model::ConicForm{T, AT, VT}, vis_src, idxmap) where {T, AT, VT}
+    model.A = AT(length(vis_src))
+    for (i, vi) in enumerate(vis_src)
+        idxmap[vi] = MOI.VariableIndex(i)
+    end
+    return
+end
+
+function rows(model::ConicForm, ci::CI{MOI.VectorAffineFunction{Float64}})
+    return ci.value .+ (1:model.dimension[ci.value])
+end
+
+function MOI.set(::ConicForm, ::MOI.VariablePrimalStart,
+                 ::MOI.VariableIndex, ::Nothing)
+end
+function MOI.set(model::ConicForm, ::MOI.VariablePrimalStart,
+                 vi::MOI.VariableIndex, value::Float64)
+    model.primal[vi.value] = value
+end
+function MOI.set(::ConicForm, ::MOI.ConstraintPrimalStart,
+                 ::MOI.ConstraintIndex, ::Nothing)
+end
+function MOI.set(model::ConicForm, ::MOI.ConstraintPrimalStart,
+                 ci::MOI.ConstraintIndex, value)
+    offset = constroffset(model, ci)
+    model.slack[rows(model, ci)] .= value
+end
+function MOI.set(::ConicForm, ::MOI.ConstraintDualStart,
+                  ::MOI.ConstraintIndex, ::Nothing)
+end
+function MOI.set(model::ConicForm, ::MOI.ConstraintDualStart,
+                  ci::MOI.ConstraintIndex, value)
+    offset = constroffset(model, ci)
+    model.dual[rows(model, ci)] .= value
+end
+function MOI.set(model::ConicForm, ::MOI.ObjectiveSense, sense::MOI.OptimizationSense)
+    model.sense = sense
+end
+variable_index_value(t::MOI.ScalarAffineTerm) = t.variable_index.value
+variable_index_value(t::MOI.VectorAffineTerm) = variable_index_value(t.scalar_term)
+function MOI.set(model::ConicForm, ::MOI.ObjectiveFunction,
+                 f::MOI.ScalarAffineFunction{Float64})
+    c = Vector(sparsevec(variable_index_value.(f.terms), MOI.coefficient.(f.terms),
+                         model.A.n))
+    model.objective_constant = f.constant
+    model.c = c
+    return nothing
+end
+
+function _allocate_constraint(model::ConicForm, src, indexmap, cone_id, ci)
+    # TODO use `CanonicalConstraintFunction`
+    func = MOI.get(src, MOI.ConstraintFunction(), ci)
+    func = MOIU.is_canonical(func) ? func : MOI.Utilities.canonical(func)
+    allocate_terms(model.A, indexmap, func)
+    offset = model.num_rows[cone_id]
+    model.num_rows[cone_id] = offset + MOI.output_dimension(func)
+    return ci, offset, func
+end
+
+function _allocate_constraints(model::ConicForm, src, indexmap, cone_id, ::Type{S}) where S
+    cis = MOI.get(src, MOI.ListOfConstraintIndices{MOI.VectorAffineFunction{Float64}, S}())
+    return map(cis) do ci
+        _allocate_constraint(model, src, indexmap, cone_id, ci)
+    end
+end
+
+function _load_variables(model::ConicForm, nvars::Integer)
+    m = sum(model.num_rows)
+    model.A.m = m
+    model.b = zeros(m)
+    model.c = zeros(model.A.n)
+    allocate_nonzeros(model.A)
+end
+
+function _load_constraints(model::ConicForm, src, indexmap, cone_offset, i, cache, preprocess)
+    for (ci_src, offset_in_cone, func) in cache
+        offset = cone_offset + offset_in_cone
+        set = MOI.get(src, MOI.ConstraintSet(), ci_src)
+        new_func = preprocess(func, set)
+        load_terms(model.A, indexmap, new_func, offset)
+        copyto!(model.b, offset + 1, new_func.constants)
+        model.dimension[offset] = MOI.output_dimension(func)
+        indexmap[ci_src] = typeof(ci_src)(offset)
+    end
+end
+
+# Vectorized length for matrix dimension n
+sympackedlen(n) = div(n*(n+1), 2)
+# Matrix dimension for vectorized length n
+sympackeddim(n) = div(isqrt(1+8n) - 1, 2)
+function _sympackedto(x, n, mapfrom, mapto)
+    @assert length(x) == sympackedlen(n)
+    y = similar(x)
+    for i in 1:n, j in 1:i
+        y[mapto(i, j)] = x[mapfrom(i, j)]
+    end
+    y
+end
+trimap(i::Integer, j::Integer) = i < j ? trimap(j, i) : div((i-1)*i, 2) + j
+trimapL(i::Integer, j::Integer, n::Integer) = i < j ? trimapL(j, i, n) : i + div((2n-j) * (j-1), 2)
+sympackedLtoU(x, n=sympackeddim(length(x))) = _sympackedto(x, n, (i, j) -> trimapL(i, j, n), trimap)
+sympackedUtoL(x, n) = _sympackedto(x, n, trimap, (i, j) -> trimapL(i, j, n))
+
+function _scale(i, coef)
+    if MOI.Utilities.is_diagonal_vectorized_index(i)
+        return coef
+    else
+        return coef * √2
+    end
+end
+
+function _preprocess_function(func, set::MOI.PositiveSemidefiniteConeTriangle)
+    n = set.side_dimension
+    LtoU_map = sympackedLtoU(1:sympackedlen(n), n)
+    function map_term(t::MOI.VectorAffineTerm)
+        return MOI.VectorAffineTerm(
+            LtoU_map[t.output_index],
+            MOI.ScalarAffineTerm(
+                _scale(t.output_index, t.scalar_term.coefficient),
+                t.scalar_term.variable_index
+            )
+        )
+    end
+    UtoL_map = sympackedUtoL(1:sympackedlen(n), n)
+    function constant(row)
+        i = UtoL_map[row]
+        return _scale(i, func.constants[i])
+    end
+    new_func = MOI.VectorAffineFunction{Float64}(
+        MOI.VectorAffineTerm{Float64}[map_term(t) for t in func.terms],
+        constant.(eachindex(func.constants))
+    )
+    # The rows have been reordered in `map_term` so we need to re-canonicalize to reorder the rows.
+    MOI.Utilities.canonicalize!(new_func)
+    return new_func
+end
+_preprocess_function(func, set) = func
+
+function MOI.copy_to(dest::ConicForm, src::MOI.ModelLike; preprocess = _preprocess_function, copy_names::Bool=true)
+    MOI.empty!(dest)
+
+    vis_src = MOI.get(src, MOI.ListOfVariableIndices())
+    idxmap = MOIU.IndexMap()
+
+    has_constraints = BitSet()
+    for (F, S) in MOI.get(src, MOI.ListOfConstraints())
+        i = _findfirst(S, dest.cone_types)
+        if i === nothing || F != MOI.VectorAffineFunction{Float64}
+            throw(MOI.UnsupportedConstraint{F, S}())
+        end
+        push!(has_constraints, i)
+    end
+
+    _allocate_variables(dest, vis_src, idxmap)
+
+    # Allocate constraints
+    caches = map(collect(has_constraints)) do i
+        _allocate_constraints(dest, src, idxmap, i, dest.cone_types[i])
+    end
+
+    # Load variables
+    _load_variables(dest, length(vis_src))
+
+    # Set variable attributes
+    MOIU.pass_attributes(dest, src, copy_names, idxmap, vis_src)
+
+    # Set model attributes
+    MOIU.pass_attributes(dest, src, copy_names, idxmap)
+
+    # Load constraints
+    offset = 0
+    for (i, cache) in zip(has_constraints, caches)
+        _load_constraints(dest, src, idxmap, offset, i, cache, preprocess)
+        offset += dest.num_rows[i]
+    end
+
+    return idxmap
 end
