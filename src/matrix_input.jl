@@ -47,11 +47,11 @@ function MOI.get(model::AbstractLPForm{T}, ::MOI.ConstraintFunction,
 end
 
 
-struct LPStandardForm{T, AT<:AbstractMatrix{T}} <: AbstractLPForm{T}
+struct LPStandardForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
-    c::Vector{T}
+    c::VT
     A::AT
-    b::Vector{T}
+    b::VT
 end
 
 function MOI.get(model::LPStandardForm{T}, ::MOI.ListOfConstraints) where T
@@ -91,11 +91,11 @@ function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet,
     return MOI.Nonnegatives(MOI.get(model, MOI.NumberOfVariables()))
 end
 
-struct LPGeometricForm{T, AT<:AbstractMatrix{T}} <: AbstractLPForm{T}
+struct LPGeometricForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
     direction::MOI.OptimizationSense
-    c::Vector{T}
+    c::VT
     A::AT
-    b::Vector{T}
+    b::VT
 end
 
 function MOI.get(model::LPGeometricForm{T}, ::MOI.ListOfConstraints) where T
@@ -181,14 +181,14 @@ function MOI.get(model::LPMixedForm, ::MOI.ConstraintSet, ci::VBOUND)
     return _bound_set(model.v_lb[ci.value], model.v_ub[ci.value])
 end
 
-struct LPForm{T, AT<:AbstractMatrix{T}} <: LPMixedForm{T}#, V<:AbstractVector{T}, M<:AbstractMatrix{T}}
+struct LPForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: LPMixedForm{T} #, V<:AbstractVector{T} #, M<:AbstractMatrix{T}}
     direction::MOI.OptimizationSense
-    c::Vector{T}
+    c::VT
     A::AT
-    c_lb::Vector{T}
-    c_ub::Vector{T}
-    v_lb::Vector{T}
-    v_ub::Vector{T}
+    c_lb::VT
+    c_ub::VT
+    v_lb::VT
+    v_ub::VT
 end
 
 function _constraint_bound_sense(model::LPForm, i)
@@ -198,14 +198,14 @@ function MOI.get(model::LPForm, ::MOI.ConstraintSet, ci::AFF)
     return _bound_set(model.c_lb[ci.value], model.c_ub[ci.value])
 end
 
-struct LPSolverForm{T, AT<:AbstractMatrix{T}} <: LPMixedForm{T}
+struct LPSolverForm{T, AT<:AbstractMatrix{T}, VT<:AbstractVector{T}} <: LPMixedForm{T}
     direction::MOI.OptimizationSense
-    c::Vector{T}
+    c::VT
     A::AT
-    b::Vector{T}
+    b::VT
     senses::Vector{ConstraintSense}
-    v_lb::Vector{T}
-    v_ub::Vector{T}
+    v_lb::VT
+    v_ub::VT
 end
 
 function _constraint_bound_sense(model::LPSolverForm, i)
