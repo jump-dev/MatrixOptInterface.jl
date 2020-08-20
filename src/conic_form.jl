@@ -28,33 +28,22 @@ const CONES = Dict(
     MOI.DualExponentialCone => 6
 )
 
+_set_type(::MOI.ConstraintIndex{F,S}) where {F,S} = S
 cons_offset(conic::MOI.Zeros) = conic.dimension
 cons_offset(conic::MOI.Nonnegatives) = conic.dimension
 cons_offset(conic::MOI.SecondOrderCone) = conic.dimension
 cons_offset(conic::MOI.PositiveSemidefiniteConeTriangle) = Int64((conic.side_dimension*(conic.side_dimension+1))/2)
 
-# function restructure_arrays(_s::Array{T}, _y::Array{T}, cones::Array{<: MOI.AbstractVectorSet}) where {T}
-#     i=0
-#     s = Array{T}[]
-#     y = Array{T}[]
-#     for conic in cones
-#         offset = cons_offset(conic)
-#         push!(s, _s[i.+(1:offset)])
-#         push!(y, _y[i.+(1:offset)])
-#         i += offset
-#     end
-#     return s, y
-# end
-
 function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
     # reorder constraints
     cis = sort(
         con_idx, 
-        by = x->CONES[typeof(MOI.get(model, MOI.ConstraintSet(), x))]
+        by = x->CONES[_set_type(x)]
     )
 
     # extract cones
-    cones = typeof.(MOI.get(model, MOI.ConstraintSet(), cis))
+    cones = _set_type.(cis)
+    cones = unique(cones)
 
     conic = ConicForm{T, SparseMatrixCSRtoCSC{Int64}, Array{T, 1}}(Tuple(cones))
 
