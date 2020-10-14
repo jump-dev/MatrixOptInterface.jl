@@ -4,11 +4,8 @@ authors = ["JuMP-dev"]
 version = "0.1.0"
 
 [deps]
-COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
-ProxSDP = "65e78d25-6039-50a4-9445-38022e3d2eb3"
-SCS = "c946c3f1-0d1f-5ce8-9dea-7daa1f7e2d13"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
