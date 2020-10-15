@@ -162,4 +162,17 @@ end
     # vector, matrix dimensions
     i = rand(10:100)
     @test MatOI.sympackedlen(MatOI.sympackeddim(i)) <= i
+
+    # testing offsets
+    n = rand(Int) % 100
+    @test MatOI.cons_offset(MOI.Zeros(n)) == n
+    @test MatOI.cons_offset(MOI.Nonnegatives(n)) == n
+    @test MatOI.cons_offset(MOI.SecondOrderCone(n)) == n
+    @test MatOI.cons_offset(MOI.PositiveSemidefiniteConeTriangle(n)) == ((n+1)*n)/2
+
+    model = MOI.instantiate(SCS.Optimizer, with_bridge_type=Float64)
+    cf = MatOI.get_conic_form(Float64,model,[])
+    @test MOI.is_empty(cf) == false
+    MOI.empty!(cf)
+    @test MOI.is_empty(cf) == true
 end
