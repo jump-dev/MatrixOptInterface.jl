@@ -1,7 +1,7 @@
 CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
 
 @testset "MOI to MatOI conversion 1" begin
-    # _psd1test: https://github.com/jump-dev/MOI.jl/blob/master/src/Test/contconic.jl#L2417
+    # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
 
     for optimizer in CONIC_OPTIMIZERS
         model = MOI.instantiate(optimizer, with_bridge_type=Float64)
@@ -58,7 +58,8 @@ CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
 
         @test MatModel.c' ≈ [2. 2. 2. 0. 2. 2. 1. 0. 0.]
         @test MatModel.b' ≈ [-1.  -0.5  0.   0.   0.   0.   0.   0.   0.   0.   0. ]
-        @test MatModel.A.nzval ≈ [-1.0, -1.0, -1.0, -2.0, -1.41421, -1.0, -1.0, -1.0, -2.0, -1.41421, -2.0, -1.41421, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0] atol=ATOL rtol=RTOL
+        @test MatModel.A.nzval ≈ [-1.0, -1.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -2.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0] atol=ATOL rtol=RTOL
+        # note below matrix is in SCS format (scaled)
         # @test A[1, 1] ≈	-1.0 
         # @test A[2, 1] ≈	-1.0
         # @test A[6, 1] ≈	-1.0
@@ -128,7 +129,8 @@ end
 
         @test MatModel.c ≈ [-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -1.0]
         @test MatModel.b ≈ [0.0, 10.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, 0.0, 0.0, 0.0]
-        @test MatModel.A.nzval ≈ [1.0, -1.0, -0.45, 0.45, -0.45, 1.0, -1.0, -0.8, 0.318198, -0.1, 1.0, -1.0, -0.9, 1.0, -1.0, -0.225, 1.0, -1.0, -0.1125, 0.1125, -0.1125, 1.0, -1.0, -0.225, 1.0, 1.0] atol=ATOL rtol=RTOL
+        @test MatModel.A.nzval ≈ [1.0, -1.0, -0.45, 0.318198, -0.45, 1.0, -1.0, -0.8, 0.225, -0.1, 1.0, -1.0, -0.9, 1.0, -1.0, -0.225, 1.0, -1.0, -0.1125, 0.0795495, -0.1125, 1.0, -1.0, -0.225, 1.0, 1.0] atol=ATOL rtol=RTOL
+        # note below matrix is in SCS format (scaled)
         # @test A[2 , 1]  ≈  1.0
         # @test A[3 , 1]  ≈  -1.0
         # @test A[9 , 1]  ≈  -0.45
@@ -159,10 +161,6 @@ end
 end
 
 @testset "Testing minor utilities" begin
-    # vector, matrix dimensions
-    i = rand(10:100)
-    @test MatOI.sympackedlen(MatOI.sympackeddim(i)) <= i
-
     # testing offsets
     n = rand(Int) % 100
     @test MatOI.cons_offset(MOI.Zeros(n)) == n

@@ -157,71 +157,18 @@ function _load_variables(model::ConicForm, nvars::Integer)
     allocate_nonzeros(model.A)
 end
 
-function _load_constraints(model::ConicForm, src, indexmap, cone_offset, i, cache, preprocess)
+function _load_constraints(model::ConicForm, src, indexmap, cone_offset, i, cache)
     for (ci_src, offset_in_cone, func) in cache
         offset = cone_offset + offset_in_cone
         set = MOI.get(src, MOI.ConstraintSet(), ci_src)
-        new_func = preprocess(func, set)
-        load_terms(model.A, indexmap, new_func, offset)
-        copyto!(model.b, offset + 1, new_func.constants)
+        load_terms(model.A, indexmap, func, offset)
+        copyto!(model.b, offset + 1, func.constants)
         model.dimension[offset] = MOI.output_dimension(func)
         indexmap[ci_src] = typeof(ci_src)(offset)
     end
 end
 
-# Vectorized length for matrix dimension n
-sympackedlen(n) = div(n*(n+1), 2)
-# Matrix dimension for vectorized length n
-sympackeddim(n) = div(isqrt(1+8n) - 1, 2)
-function _sympackedto(x, n, mapfrom, mapto)
-    @assert length(x) == sympackedlen(n)
-    y = similar(x)
-    for i in 1:n, j in 1:i
-        y[mapto(i, j)] = x[mapfrom(i, j)]
-    end
-    y
-end
-trimap(i::Integer, j::Integer) = i < j ? trimap(j, i) : div((i-1)*i, 2) + j
-trimapL(i::Integer, j::Integer, n::Integer) = i < j ? trimapL(j, i, n) : i + div((2n-j) * (j-1), 2)
-sympackedLtoU(x, n=sympackeddim(length(x))) = _sympackedto(x, n, (i, j) -> trimapL(i, j, n), trimap)
-sympackedUtoL(x, n) = _sympackedto(x, n, trimap, (i, j) -> trimapL(i, j, n))
-
-function _scale(i, coef)
-    if MOI.Utilities.is_diagonal_vectorized_index(i)
-        return coef
-    else
-        return coef * √2
-    end
-end
-
-function _preprocess_function(func, set::MOI.PositiveSemidefiniteConeTriangle)
-    n = set.side_dimension
-    LtoU_map = sympackedLtoU(1:sympackedlen(n), n)
-    function map_term(t::MOI.VectorAffineTerm)
-        return MOI.VectorAffineTerm(
-            LtoU_map[t.output_index],
-            MOI.ScalarAffineTerm(
-                _scale(t.output_index, t.scalar_term.coefficient),
-                t.scalar_term.variable_index
-            )
-        )
-    end
-    UtoL_map = sympackedUtoL(1:sympackedlen(n), n)
-    function constant(row)
-        i = UtoL_map[row]
-        return _scale(i, func.constants[i])
-    end
-    new_func = MOI.VectorAffineFunction{Float64}(
-        MOI.VectorAffineTerm{Float64}[map_term(t) for t in func.terms],
-        constant.(eachindex(func.constants))
-    )
-    # The rows have been reordered in `map_term` so we need to re-canonicalize to reorder the rows.
-    MOI.Utilities.canonicalize!(new_func)
-    return new_func
-end
-_preprocess_function(func, set) = func
-
-function MOI.copy_to(dest::ConicForm, src::MOI.ModelLike; preprocess = _preprocess_function, copy_names::Bool=true)
+function MOI.copy_to(dest::ConicForm, src::MOI.ModelLike; copy_names::Bool=true)
     MOI.empty!(dest)
 
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
@@ -255,7 +202,7 @@ function MOI.copy_to(dest::ConicForm, src::MOI.ModelLike; preprocess = _preproce
     # Load constraints
     offset = 0
     for (i, cache) in zip(has_constraints, caches)
-        _load_constraints(dest, src, idxmap, offset, i, cache, preprocess)
+        _load_constraints(dest, src, idxmap, offset, i, cache)
         offset += dest.num_rows[i]
     end
 
