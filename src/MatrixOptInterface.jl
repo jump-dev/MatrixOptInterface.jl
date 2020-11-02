@@ -5,6 +5,9 @@ using MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MathOptInterface.Utilities
 
+const CI = MOI.ConstraintIndex
+const VI = MOI.VariableIndex
+
 # export MatrixOptimizer
 
 @enum ConstraintSense EQUAL_TO GREATER_THAN LESS_THAN INTERVAL
@@ -57,6 +60,8 @@ end
 
 @enum VariableType CONTINUOUS INTEGER BINARY
 
+include("sparse_matrix.jl")
+include("conic_form.jl")
 include("matrix_input.jl")
 include("change_form.jl")
 

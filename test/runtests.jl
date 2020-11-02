@@ -1,4 +1,7 @@
 using SparseArrays, Test
+using SCS
+using ProxSDP
+using COSMO
 
 import MatrixOptInterface
 
@@ -6,6 +9,12 @@ const MatOI = MatrixOptInterface
 const MOI = MatOI.MOI
 const MOIU = MatOI.MOIU
 const MOIB = MOI.Bridges
+
+
+const ATOL = 1e-4
+const RTOL = 1e-4
+
+include("conic_form.jl")
 
 const dense_A = [1.0 2.0
                  3.0 4.0]
