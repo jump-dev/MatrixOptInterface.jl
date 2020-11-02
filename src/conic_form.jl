@@ -7,10 +7,14 @@ mutable struct ConicForm{T, AT, VT, C} <: MOI.ModelLike
     b::VT          # `b - Ax in cones`
     c::VT          # `sense c'x + objective_constant`
     cone_types::C
+    cone_types_dict::Dict{DataType, Int}
 
     function ConicForm{T, AT, VT}(cone_types) where {T, AT, VT}
         model = new{T, AT, VT, typeof(cone_types)}()
         model.cone_types = cone_types
+        model.cone_types_dict = Dict{DataType, Int}(
+            s => i for (i, s) in enumerate(cone_types)
+        )
         model.num_rows = zeros(Int, length(cone_types))
         model.dimension = Dict{Int, Int}()
         model.A = nothing
@@ -24,7 +28,7 @@ const CONES = Dict(
     MOI.Nonnegatives => 2,
     MOI.SecondOrderCone => 3,
     MOI.PositiveSemidefiniteConeTriangle => 4,
-    MOI.ExponentialCone => 5, 
+    MOI.ExponentialCone => 5,
     MOI.DualExponentialCone => 6
 )
 
@@ -37,7 +41,7 @@ cons_offset(conic::MOI.PositiveSemidefiniteConeTriangle) = Int64((conic.side_dim
 function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
     # reorder constraints
     cis = sort(
-        con_idx, 
+        con_idx,
         by = x->CONES[_set_type(x)]
     )
 
@@ -66,21 +70,11 @@ function MOI.empty!(model::ConicForm{T}) where T
     model.objective_constant = zero(T)
 end
 
-function _first(::Type{S}, idx::Int, ::Type{S}, args::Vararg{Type, N}) where {S, N}
-    return idx
-end
-function _first(::Type{S}, idx::Int, ::Type, args::Vararg{Type, N}) where {S, N}
-    return _first(S, idx + 1, args...)
-end
-_first(::Type, idx::Int) = nothing
-
-_findfirst(::Type{S}, sets::Tuple) where {S} = _first(S, 1, sets...)
-
 function MOI.supports_constraint(
     model::ConicForm,
     ::Type{MOI.VectorAffineFunction{Float64}},
     ::Type{S}) where S <: MOI.AbstractVectorSet
-    return _findfirst(S, model.cone_types) !== nothing
+    return haskey(model.cone_types_dict, S)
 end
 
 function _allocate_variables(model::ConicForm{T, AT, VT}, vis_src, idxmap) where {T, AT, VT}
@@ -176,7 +170,7 @@ function MOI.copy_to(dest::ConicForm, src::MOI.ModelLike; copy_names::Bool=true)
 
     has_constraints = BitSet()
     for (F, S) in MOI.get(src, MOI.ListOfConstraints())
-        i = _findfirst(S, dest.cone_types)
+        i = get(dest.cone_types_dict, S, nothing)
         if i === nothing || F != MOI.VectorAffineFunction{Float64}
             throw(MOI.UnsupportedConstraint{F, S}())
         end
