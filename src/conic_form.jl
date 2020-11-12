@@ -22,16 +22,6 @@ mutable struct ConicForm{T, AT, VT, C} <: MOI.ModelLike
     end
 end
 
-# The ordering of CONES matches SCS
-const CONES = Dict(
-    MOI.Zeros => 1,
-    MOI.Nonnegatives => 2,
-    MOI.SecondOrderCone => 3,
-    MOI.PositiveSemidefiniteConeTriangle => 4,
-    MOI.ExponentialCone => 5,
-    MOI.DualExponentialCone => 6
-)
-
 _set_type(::MOI.ConstraintIndex{F,S}) where {F,S} = S
 cons_offset(conic::MOI.Zeros) = conic.dimension
 cons_offset(conic::MOI.Nonnegatives) = conic.dimension
@@ -39,14 +29,8 @@ cons_offset(conic::MOI.SecondOrderCone) = conic.dimension
 cons_offset(conic::MOI.PositiveSemidefiniteConeTriangle) = Int64((conic.side_dimension*(conic.side_dimension+1))/2)
 
 function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
-    # reorder constraints
-    cis = sort(
-        con_idx,
-        by = x->CONES[_set_type(x)]
-    )
-
     # extract cones
-    cones = _set_type.(cis)
+    cones = _set_type.(con_idx)
     cones = unique(cones)
 
     conic = ConicForm{T, SparseMatrixCSRtoCSC{Int64}, Array{T, 1}}(Tuple(cones))
