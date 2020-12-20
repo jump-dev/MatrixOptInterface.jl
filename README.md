@@ -1,5 +1,8 @@
 # MatrixOptInterface.jl
 
+[![Build Status](https://github.com/jump-dev/MatrixOptInterface.jl/workflows/CI/badge.svg)](https://github.com/jump-dev/MatrixOptInterface.jl/actions)
+[![Coverage](https://codecov.io/gh/jump-dev/MatrixOptInterface.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jump-dev/MatrixOptInterface.jl)
+
 **This package is this in early development, feedback is welcome!**
 
 An interface for optimization problems in matrix forms.
@@ -76,7 +79,7 @@ where `senses` is a vector whose `i`th entry is either
 
 ## Transition from linprog
 
-If you are used to [`MathProgBase`](https://github.com/JuliaOpt/MathProgBase.jl)'s or MATLAB's `linprog` function, this package provides an easy transition.
+If you are used to [`MathProgBase`](https://github.com/JuliaOpt/MathProgBase.jl)'s, MATLAB's or scipy's `linprog` function, this package provides an easy transition.
 The package does not provide a one-shot function that takes the form as input are returns the solution and status as
 in general, solvers may have multiple solutions to report and the status cannot be summarized in a single value.
 `MathOptInterface` embraces this complexity and allows to retrieve multiple solutions,
