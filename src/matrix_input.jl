@@ -3,6 +3,7 @@ abstract type AbstractLPForm{T} <: MOI.ModelLike end
 # FIXME Taken from Polyhedra.jl, we should maybe move this to MOIU
 structural_nonzero_indices(a::SparseArrays.SparseVector) = SparseArrays.nonzeroinds(a)
 structural_nonzero_indices(a::AbstractVector) = eachindex(a)
+
 function _dot_terms(a::AbstractVector{T}) where T
     return MOI.ScalarAffineTerm{T}[
         MOI.ScalarAffineTerm{T}(a[i], MOI.VariableIndex(i))
