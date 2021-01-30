@@ -21,30 +21,30 @@ CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
         vov = MOI.VectorOfVariables(X)
 
         cX = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction{Float64}(vov), MOI.PositiveSemidefiniteConeTriangle(3)
         )
 
         cx = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction{Float64}(MOI.VectorOfVariables(x)), MOI.SecondOrderCone(3)
         )
 
         c1 = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 1., 1., 1.], [X[1], X[3], X[end], x[1]])), 
+                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 1., 1., 1.], [X[1], X[3], X[end], x[1]])),
                 [-1.0]
-            ), 
+            ),
             MOI.Zeros(1)
         )
 
         c2 = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 2, 1, 2, 2, 1, 1, 1], [X; x[2]; x[3]])), 
+                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 2, 1, 2, 2, 1, 1, 1], [X; x[2]; x[3]])),
                 [-0.5]
-            ), 
+            ),
             MOI.Zeros(1)
         )
 
@@ -64,7 +64,7 @@ end
 
 @testset "MOI to MatOI conversion 2" begin
     # find equivalent diffcp program here - https://github.com/AKS1996/jump-gsoc-2020/blob/master/diffcp_sdp_3_py.ipynb
-    
+
     for optimizer in CONIC_OPTIMIZERS
         model = MOI.instantiate(optimizer, with_bridge_type=Float64)
 
@@ -74,11 +74,11 @@ end
         η = 10.0
 
         c1  = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction(
                 MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(-1.0, x[1:6])),
                 [η]
-            ), 
+            ),
             MOI.Nonnegatives(1)
         )
         c2 = MOI.add_constraint(model, MOI.VectorAffineFunction(MOI.VectorAffineTerm.(1:6, MOI.ScalarAffineTerm.(1.0, x[1:6])), zeros(6)), MOI.Nonnegatives(6))
@@ -92,11 +92,11 @@ end
                                                                 [x[1:7];     x[1:3]; x[5:6]; x[1:3]; x[5:7]])),
                                                                 zeros(3)), MOI.PositiveSemidefiniteConeTriangle(2))
         c4 = MOI.add_constraint(
-            model, 
+            model,
             MOI.VectorAffineFunction(
                 MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(0.0, [x[1:3]; x[5:6]])),
                 [0.0]
-            ), 
+            ),
             MOI.Zeros(1)
         )
 
@@ -112,13 +112,6 @@ end
 end
 
 @testset "Testing minor utilities" begin
-    # testing offsets
-    n = rand(Int) % 100
-    @test MatOI.cons_offset(MOI.Zeros(n)) == n
-    @test MatOI.cons_offset(MOI.Nonnegatives(n)) == n
-    @test MatOI.cons_offset(MOI.SecondOrderCone(n)) == n
-    @test MatOI.cons_offset(MOI.PositiveSemidefiniteConeTriangle(n)) == ((n+1)*n)/2
-
     model = MOI.instantiate(SCS.Optimizer, with_bridge_type=Float64)
     cf = MatOI.get_conic_form(Float64,model,[])
     @test MOI.is_empty(cf) == false
