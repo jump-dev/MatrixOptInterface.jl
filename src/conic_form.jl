@@ -33,7 +33,7 @@ function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.Abstrac
     cones = _set_type.(con_idx)
     cones = unique(cones)
 
-    conic = ConicForm{T, SparseMatrixCSRtoCSC{Int}, Array{T, 1}}(Tuple(cones))
+    conic = ConicForm{T, SparseMatrixCSRtoCSC{T, Int}, Vector{T}}(Tuple(cones))
 
     idxmap = MOI.copy_to(conic, model)
 
