@@ -1,7 +1,4 @@
 using SparseArrays, Test
-using SCS
-using ProxSDP
-using COSMO
 
 import MatrixOptInterface
 
