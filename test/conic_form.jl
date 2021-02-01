@@ -5,19 +5,24 @@ function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
     @test A.rowval == B.rowval
     @test A.colptr == B.colptr
 end
-function _test_matrix_equal(A::MatOI.SparseMatrixCSRtoCSC, B::SparseMatrixCSC)
+function _test_matrix_equal(A::MatOI.SparseMatrixCSRtoCSC{Tv, Ti, I}, B::SparseMatrixCSC) where {Tv, Ti, I}
     @test A.m == B.m
     @test A.n == B.n
     @test A.nzval ≈ B.nzval atol=ATOL rtol=RTOL
-    @test A.rowval == B.rowval .- 1
-    @test A.colptr == B.colptr .- 1
+    if I <: MatOI.OneBasedIndexing
+        @test A.rowval == B.rowval
+        @test A.colptr == B.colptr
+    else
+        @test A.rowval == B.rowval .- 1
+        @test A.colptr == B.colptr .- 1
+    end
     sA = convert(typeof(B), A)
     @test typeof(sA) == typeof(B)
     _test_matrix_equal(sA, B)
 end
 
 # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
-function psd1(::Type{T}) where T
+function psd1(::Type{T}, ::Type{I}) where {T, I}
     # We use `MockOptimizer` to have indices xor'ed so that it tests that we don't assumes they are `1:n`.
     model = MOIU.MockOptimizer(MOIU.Model{T}())
 
@@ -66,7 +71,7 @@ function psd1(::Type{T}) where T
     )
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int}, Vector{T}}([MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros])
+    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int, I}, Vector{T}}([MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros])
     index_map = MOI.copy_to(conic_form, model)
 
     @test conic_form.c' ≈ T[2 2 2 0 2 2 1 0 0]
@@ -84,7 +89,7 @@ end
 
 # Taken from `MOI.Test.psdt2test`.
 # find equivalent diffcp program here - https://github.com/AKS1996/jump-gsoc-2020/blob/master/diffcp_sdp_3_py.ipynb
-function psd2(::Type{T}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(9)/T(10)) where T
+function psd2(::Type{T}, ::Type{I}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(9)/T(10)) where {T, I}
     # We use `MockOptimizer` to have indices xor'ed so that it tests that we don't assumes they are `1:n`.
     model = MOIU.MockOptimizer(MOIU.Model{T}())
 
@@ -126,7 +131,7 @@ function psd2(::Type{T}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(9)/T(10)) w
     MOI.set(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(one(T), x[7])], zero(T)))
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int}, Vector{T}}([MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle])
+    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int, I}, Vector{T}}([MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle])
     index_map = MOI.copy_to(conic_form, model)
 
     @test conic_form.c ≈ [zeros(T, 6); one(T)]
@@ -142,7 +147,7 @@ function psd2(::Type{T}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(9)/T(10)) w
     )
 end
 
-@testset "PSD $T" for T in [Float64, BigFloat]
-    psd1(T)
-    psd2(T)
+@testset "PSD $T, $I" for T in [Float64, BigFloat], I in [MatOI.ZeroBasedIndexing, MatOI.OneBasedIndexing]
+    psd1(T, I)
+    psd2(T, I)
 end
