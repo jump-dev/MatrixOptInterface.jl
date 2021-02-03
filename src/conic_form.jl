@@ -24,23 +24,6 @@ end
 
 _set_type(::MOI.ConstraintIndex{F,S}) where {F,S} = S
 
-function get_conic_form(::Type{T}, model::M, con_idx) where {T, M <: MOI.AbstractOptimizer}
-    # extract cones
-    cones = _set_type.(con_idx)
-    cones = unique(cones)
-
-    conic = GeometricConicForm{T, SparseMatrixCSRtoCSC{T, Int}, Vector{T}}(Tuple(cones))
-
-    idxmap = MOI.copy_to(conic, model)
-
-    # fix optimization sense
-    if MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE
-        conic.c = -conic.c
-    end
-
-    return conic
-end
-
 MOI.is_empty(model::GeometricConicForm) = model.A === nothing
 function MOI.empty!(model::GeometricConicForm{T}) where T
     empty!(model.dimension)
@@ -51,9 +34,9 @@ function MOI.empty!(model::GeometricConicForm{T}) where T
 end
 
 function MOI.supports_constraint(
-    model::GeometricConicForm,
-    ::Type{MOI.VectorAffineFunction{Float64}},
-    ::Type{S}) where S <: MOI.AbstractVectorSet
+    model::GeometricConicForm{T},
+    ::Type{MOI.VectorAffineFunction{T}},
+    ::Type{S}) where {T, S <: MOI.AbstractVectorSet}
     return haskey(model.cone_types_dict, S)
 end
 
@@ -65,15 +48,15 @@ function _allocate_variables(model::GeometricConicForm{T, AT, VT}, vis_src, idxm
     return
 end
 
-function rows(model::GeometricConicForm, ci::CI{MOI.VectorAffineFunction{Float64}})
+function rows(model::GeometricConicForm{T}, ci::CI{MOI.VectorAffineFunction{T}}) where T
     return ci.value .+ (1:model.dimension[ci.value])
 end
 
 function MOI.set(::GeometricConicForm, ::MOI.VariablePrimalStart,
                  ::MOI.VariableIndex, ::Nothing)
 end
-function MOI.set(model::GeometricConicForm, ::MOI.VariablePrimalStart,
-                 vi::MOI.VariableIndex, value::Float64)
+function MOI.set(model::GeometricConicForm{T}, ::MOI.VariablePrimalStart,
+                 vi::MOI.VariableIndex, value::T) where T
     model.primal[vi.value] = value
 end
 function MOI.set(::GeometricConicForm, ::MOI.ConstraintPrimalStart,
@@ -97,8 +80,8 @@ function MOI.set(model::GeometricConicForm, ::MOI.ObjectiveSense, sense::MOI.Opt
 end
 variable_index_value(t::MOI.ScalarAffineTerm) = t.variable_index.value
 variable_index_value(t::MOI.VectorAffineTerm) = variable_index_value(t.scalar_term)
-function MOI.set(model::GeometricConicForm, ::MOI.ObjectiveFunction,
-                 f::MOI.ScalarAffineFunction{Float64})
+function MOI.set(model::GeometricConicForm{T}, ::MOI.ObjectiveFunction,
+                 f::MOI.ScalarAffineFunction{T}) where T
     c = Vector(sparsevec(variable_index_value.(f.terms), MOI.coefficient.(f.terms),
                          model.A.n))
     model.objective_constant = f.constant
@@ -116,8 +99,8 @@ function _allocate_constraint(model::GeometricConicForm, src, indexmap, cone_id,
     return ci, offset, func
 end
 
-function _allocate_constraints(model::GeometricConicForm, src, indexmap, cone_id, ::Type{S}) where S
-    cis = MOI.get(src, MOI.ListOfConstraintIndices{MOI.VectorAffineFunction{Float64}, S}())
+function _allocate_constraints(model::GeometricConicForm{T}, src, indexmap, cone_id, ::Type{S}) where {T, S}
+    cis = MOI.get(src, MOI.ListOfConstraintIndices{MOI.VectorAffineFunction{T}, S}())
     return map(cis) do ci
         _allocate_constraint(model, src, indexmap, cone_id, ci)
     end
@@ -142,7 +125,7 @@ function _load_constraints(model::GeometricConicForm, src, indexmap, cone_offset
     end
 end
 
-function MOI.copy_to(dest::GeometricConicForm, src::MOI.ModelLike; copy_names::Bool=true)
+function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where T
     MOI.empty!(dest)
 
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
@@ -151,7 +134,7 @@ function MOI.copy_to(dest::GeometricConicForm, src::MOI.ModelLike; copy_names::B
     has_constraints = BitSet()
     for (F, S) in MOI.get(src, MOI.ListOfConstraints())
         i = get(dest.cone_types_dict, S, nothing)
-        if i === nothing || F != MOI.VectorAffineFunction{Float64}
+        if i === nothing || F != MOI.VectorAffineFunction{T}
             throw(MOI.UnsupportedConstraint{F, S}())
         end
         push!(has_constraints, i)
@@ -179,6 +162,8 @@ function MOI.copy_to(dest::GeometricConicForm, src::MOI.ModelLike; copy_names::B
         _load_constraints(dest, src, idxmap, offset, i, cache)
         offset += dest.num_rows[i]
     end
+
+    final_touch(dest.A)
 
     return idxmap
 end

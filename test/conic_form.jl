@@ -1,120 +1,148 @@
-CONIC_OPTIMIZERS = [SCS.Optimizer, ProxSDP.Optimizer, COSMO.Optimizer]
-
-@testset "MOI to MatOI conversion 1" begin
-    # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
-
-    for optimizer in CONIC_OPTIMIZERS
-        model = MOI.instantiate(optimizer, with_bridge_type=Float64)
-        δ = √(1 + (3*√2+2)*√(-116*√2+166) / 14) / 2
-        ε = √((1 - 2*(√2-1)*δ^2) / (2-√2))
-        y2 = 1 - ε*δ
-        y1 = 1 - √2*y2
-        obj = y1 + y2/2
-        k = -2*δ/ε
-        x2 = ((3-2obj)*(2+k^2)-4) / (4*(2+k^2)-4*√2)
-        α = √(3-2obj-4x2)/2
-        β = k*α
-
-        X = MOI.add_variables(model, 6)
-        x = MOI.add_variables(model, 3)
-
-        vov = MOI.VectorOfVariables(X)
-
-        cX = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction{Float64}(vov), MOI.PositiveSemidefiniteConeTriangle(3)
-        )
-
-        cx = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction{Float64}(MOI.VectorOfVariables(x)), MOI.SecondOrderCone(3)
-        )
-
-        c1 = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 1., 1., 1.], [X[1], X[3], X[end], x[1]])),
-                [-1.0]
-            ),
-            MOI.Zeros(1)
-        )
-
-        c2 = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.([1., 2, 1, 2, 2, 1, 1, 1], [X; x[2]; x[3]])),
-                [-0.5]
-            ),
-            MOI.Zeros(1)
-        )
-
-        objXidx = [1:3; 5:6]
-        objXcoefs = 2*ones(5)
-        MOI.set(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(),
-        MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.([objXcoefs; 1.0], [X[objXidx]; x[1]]), 0.0))
-        MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-
-        MatModel = MatOI.get_conic_form(Float64, model, [cX; cx; c1; c2])
-
-        @test MatModel.c' ≈ [2. 2. 2. 0. 2. 2. 1. 0. 0.]
-        @test MatModel.b' ≈ [0.   0.   0.   0.   0.   0.   0.   0.   0.  -1.  -0.5 ]
-        @test MatModel.A.nzval ≈ [-1.0, -1.0, -1.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -2.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0] atol=ATOL rtol=RTOL
-    end
+function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
+    @test A.m == B.m
+    @test A.n == B.n
+    @test A.nzval ≈ B.nzval atol=ATOL rtol=RTOL
+    @test A.rowval == B.rowval
+    @test A.colptr == B.colptr
+end
+function _test_matrix_equal(A::MatOI.SparseMatrixCSRtoCSC, B::SparseMatrixCSC)
+    @test A.m == B.m
+    @test A.n == B.n
+    @test A.nzval ≈ B.nzval atol=ATOL rtol=RTOL
+    @test A.rowval == B.rowval .- 1
+    @test A.colptr == B.colptr .- 1
+    sA = convert(typeof(B), A)
+    @test typeof(sA) == typeof(B)
+    _test_matrix_equal(sA, B)
 end
 
-@testset "MOI to MatOI conversion 2" begin
-    # find equivalent diffcp program here - https://github.com/AKS1996/jump-gsoc-2020/blob/master/diffcp_sdp_3_py.ipynb
+# _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
+function psd1(::Type{T}) where T
+    # We use `MockOptimizer` to have indices xor'ed so that it tests that we don't assumes they are `1:n`.
+    model = MOIU.MockOptimizer(MOIU.Model{T}())
 
-    for optimizer in CONIC_OPTIMIZERS
-        model = MOI.instantiate(optimizer, with_bridge_type=Float64)
+    X = MOI.add_variables(model, 6)
+    x = MOI.add_variables(model, 3)
 
-        x = MOI.add_variables(model, 7)
-        @test MOI.get(model, MOI.NumberOfVariables()) == 7
+    vov = MOI.VectorOfVariables(X)
 
-        η = 10.0
+    cX = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction{T}(vov), MOI.PositiveSemidefiniteConeTriangle(3)
+    )
 
-        c1  = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(-1.0, x[1:6])),
-                [η]
-            ),
-            MOI.Nonnegatives(1)
+    cx = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction{T}(MOI.VectorOfVariables(x)), MOI.SecondOrderCone(3)
+    )
+
+    c1 = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction(
+            MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.(ones(T, 4), [X[1], X[3], X[end], x[1]])),
+            [-one(T)]
+        ),
+        MOI.Zeros(1)
+    )
+
+    c2 = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction(
+            MOI.VectorAffineTerm.(1:1, MOI.ScalarAffineTerm.(T[1, 2, 1, 2, 2, 1, 1, 1], [X; x[2]; x[3]])),
+            [-inv(T(2))]
+        ),
+        MOI.Zeros(1)
+    )
+
+    objXidx = [1:3; 5:6]
+    objXcoefs = 2ones(T, 5)
+    MOI.set(
+        model,
+        MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(),
+        MOI.ScalarAffineFunction(
+            MOI.ScalarAffineTerm.([objXcoefs; one(T)], [X[objXidx]; x[1]]),
+            zero(T)
         )
-        c2 = MOI.add_constraint(model, MOI.VectorAffineFunction(MOI.VectorAffineTerm.(1:6, MOI.ScalarAffineTerm.(1.0, x[1:6])), zeros(6)), MOI.Nonnegatives(6))
-        α = 0.8
-        δ = 0.9
-        c3 = MOI.add_constraint(model, MOI.VectorAffineFunction(MOI.VectorAffineTerm.([fill(1, 7); fill(2, 5);     fill(3, 6)],
-                                                                MOI.ScalarAffineTerm.(
-                                                                [ δ/2,       α,   δ, δ/4, δ/8,      0.0, -1.0,
-                                                                    -δ/(2*√2), -δ/4, 0,     -δ/(8*√2), 0.0,
-                                                                    δ/2,     δ-α,   0,      δ/8,      δ/4, -1.0],
-                                                                [x[1:7];     x[1:3]; x[5:6]; x[1:3]; x[5:7]])),
-                                                                zeros(3)), MOI.PositiveSemidefiniteConeTriangle(2))
-        c4 = MOI.add_constraint(
-            model,
-            MOI.VectorAffineFunction(
-                MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(0.0, [x[1:3]; x[5:6]])),
-                [0.0]
-            ),
-            MOI.Zeros(1)
+    )
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int}, Vector{T}}([MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros])
+    index_map = MOI.copy_to(conic_form, model)
+
+    @test conic_form.c' ≈ T[2 2 2 0 2 2 1 0 0]
+    @test conic_form.b' ≈ T[0 0 0 0 0 0 0 0 0 -1 -inv(T(2))]
+    _test_matrix_equal(
+        conic_form.A,
+        SparseMatrixCSC(
+            11, 9,
+            [1, 4, 6, 9, 11, 13, 16, 18, 20, 22],
+            [1, 10, 11, 2, 11, 3, 10, 11, 4, 11, 5, 11, 6, 10, 11, 7, 10, 8, 11, 9, 11],
+            T[-1, -1, -1, -1, -2, -1, -1, -1, -1, -2, -1, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1],
         )
-
-        MOI.set(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x[7])], 0.0))
-        MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-
-        MatModel = MatOI.get_conic_form(Float64, model, [c1; c2; c3; c4])
-
-        @test MatModel.c ≈ [-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -1.0]
-        @test MatModel.b ≈ [10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        @test MatModel.A.nzval ≈ [1.0, -1.0, -0.45, 0.318198, -0.45, 1.0, -1.0, -0.8, 0.225, -0.1, 1.0, -1.0, -0.9, 1.0, -1.0, -0.225, 1.0, -1.0, -0.1125, 0.0795495, -0.1125, 1.0, -1.0, -0.225, 1.0, 1.0] atol=ATOL rtol=RTOL
-    end
+    )
 end
 
-@testset "Testing minor utilities" begin
-    model = MOI.instantiate(SCS.Optimizer, with_bridge_type=Float64)
-    cf = MatOI.get_conic_form(Float64,model,[])
-    @test MOI.is_empty(cf) == false
-    MOI.empty!(cf)
-    @test MOI.is_empty(cf) == true
+# Taken from `MOI.Test.psdt2test`.
+# find equivalent diffcp program here - https://github.com/AKS1996/jump-gsoc-2020/blob/master/diffcp_sdp_3_py.ipynb
+function psd2(::Type{T}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(9)/T(10)) where T
+    # We use `MockOptimizer` to have indices xor'ed so that it tests that we don't assumes they are `1:n`.
+    model = MOIU.MockOptimizer(MOIU.Model{T}())
+
+    x = MOI.add_variables(model, 7)
+
+    c1  = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction(
+            MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(-one(T), x[1:6])),
+            [η]
+        ),
+        MOI.Nonnegatives(1)
+    )
+    c2 = MOI.add_constraint(model, MOI.VectorAffineFunction(MOI.VectorAffineTerm.(1:6, MOI.ScalarAffineTerm.(one(T), x[1:6])), zeros(T, 6)), MOI.Nonnegatives(6))
+
+    c3 = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction(
+            MOI.VectorAffineTerm.(
+                [fill(1, 7); fill(2, 5);     fill(3, 6)],
+                MOI.ScalarAffineTerm.(
+                [ δ/2,       α,   δ, δ/4, δ/8,      0, -1,
+                 -δ/(2*√2), -δ/4, 0,     -δ/(8*√2), 0,
+                  δ/2,     δ-α,   0,      δ/8,      δ/4, -1],
+                [x[1:7];     x[1:3]; x[5:6]; x[1:3]; x[5:7]])),
+                zeros(T, 3)
+        ),
+        MOI.PositiveSemidefiniteConeTriangle(2)
+    )
+    c4 = MOI.add_constraint(
+        model,
+        MOI.VectorAffineFunction(
+            MOI.VectorAffineTerm.(1, MOI.ScalarAffineTerm.(zero(T), [x[1:3]; x[5:6]])),
+            [zero(T)]
+        ),
+        MOI.Zeros(1)
+    )
+
+    MOI.set(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}(), MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(one(T), x[7])], zero(T)))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+
+    conic_form = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int}, Vector{T}}([MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle])
+    index_map = MOI.copy_to(conic_form, model)
+
+    @test conic_form.c ≈ [zeros(T, 6); one(T)]
+    @test conic_form.b ≈ [T(10); zeros(T, 10)]
+    _test_matrix_equal(
+        conic_form.A,
+        SparseMatrixCSC(
+            11, 7,
+            [1, 6, 11, 14, 17, 22, 25, 27],
+            [1, 2, 9, 10, 11, 1, 3, 9, 10, 11, 1, 4, 9, 1, 5, 9, 1, 6, 9, 10, 11, 1, 7, 11, 9, 11],
+            T[1.0, -1.0, -0.45, 0.318198, -0.45, 1.0, -1.0, -0.8, 0.225, -0.1, 1.0, -1.0, -0.9, 1.0, -1.0, -0.225, 1.0, -1.0, -0.1125, 0.0795495, -0.1125, 1.0, -1.0, -0.225, 1.0, 1.0],
+        )
+    )
+end
+
+@testset "PSD $T" for T in [Float64, BigFloat]
+    psd1(T)
+    psd2(T)
 end

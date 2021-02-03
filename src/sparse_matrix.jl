@@ -42,3 +42,20 @@ end
 function load_terms(A::SparseMatrixCSRtoCSC, indexmap, func, offset)
     _load_terms(A.colptr, A.rowval, A.nzval, indexmap, func.terms, offset)
 end
+
+"""
+    Base.convert(::Type{SparseMatrixCSC{Tv, Ti}}, A::SparseMatrixCSRtoCSC{Tv, Ti}) where {Tv, Ti}
+
+Converts `A` to a `SparseMatrixCSC`. Note that the field `A.nzval` is **not
+copied** so if `A` is modified after the call of this function, it can still
+affect the value returned.
+"""
+function Base.convert(::Type{SparseMatrixCSC{Tv, Ti}}, A::SparseMatrixCSRtoCSC{Tv, Ti}) where {Tv, Ti}
+    return SparseMatrixCSC{Tv, Ti}(
+        A.m,
+        A.n,
+        A.colptr .+ one(Ti),
+        A.rowval .+ one(Ti),
+        A.nzval
+    )
+end
