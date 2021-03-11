@@ -1,6 +1,6 @@
 function change_form(::Type{LPForm{T, AT, VT}}, lp::LPForm) where {T, AT, VT}
     return LPForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         lp.c_lb,
@@ -12,7 +12,7 @@ end
 
 function change_form(::Type{LPForm{T, AT, VT}}, lp::LPStandardForm{T}) where {T, AT, VT}
     return LPForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         lp.b,
@@ -23,7 +23,7 @@ function change_form(::Type{LPForm{T, AT, VT}}, lp::LPStandardForm{T}) where {T,
 end
 function change_form(::Type{LPForm{T, AT, VT}}, lp::LPGeometricForm{T}) where {T, AT, VT}
     return LPForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         fill(typemin(T), length(lp.b)),
@@ -48,7 +48,7 @@ function change_form(::Type{LPForm{T, AT, VT}}, lp::LPSolverForm{T}) where {T, A
         end
     end
     return LPForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         c_lb,
@@ -60,7 +60,7 @@ end
 
 function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::LPGeometricForm) where {T, AT, VT}
     return LPGeometricForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         lp.b
@@ -105,7 +105,7 @@ function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::LPForm{T}) where {T
         -lp.v_lb[has_v_lower],
     )
     return LPGeometricForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         new_A,
         new_b
@@ -118,7 +118,7 @@ end
 
 function change_form(::Type{LPStandardForm{T, AT, VT}}, lp::LPStandardForm) where {T, AT, VT}
     return LPStandardForm(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         lp.b
@@ -136,7 +136,7 @@ function change_form(::Type{LPStandardForm{T, AT, VT}}, lp::LPGeometricForm{T}) 
         fill(0.0, length(lp.b))
     )
     return LPStandardForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         new_c,
         new_A,
         copy(lp.b)
@@ -150,7 +150,7 @@ end
 
 function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPSolverForm) where {T, AT, VT}
     return LPSolverForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         lp.A,
         lp.b,
@@ -182,7 +182,7 @@ function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPForm{T}) where {T, A
         end
     end
     return LPSolverForm{T, AT, VT}(
-        lp.direction,
+        lp.sense,
         lp.c,
         new_A,
         new_b,
