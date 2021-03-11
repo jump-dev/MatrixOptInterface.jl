@@ -1,3 +1,14 @@
+
+"""
+    GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
+
+Represents an optimization model of the form:
+```
+sense ⟨c, x⟩ + c0
+s.t.  b_i - A_i x ∈ C_i ∀ i
+```
+with each `C_i` a cone defined in MOI.
+"""
 mutable struct GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
     num_rows::Vector{Int}
     dimension::Dict{Int, Int}
@@ -25,7 +36,8 @@ end
 _set_type(::MOI.ConstraintIndex{F,S}) where {F,S} = S
 
 MOI.is_empty(model::GeometricConicForm) = model.A === nothing
-function MOI.empty!(model::GeometricConicForm{T}) where T
+
+function MOI.empty!(model::GeometricConicForm{T}) where {T}
     empty!(model.dimension)
     fill!(model.num_rows, 0)
     model.A = nothing

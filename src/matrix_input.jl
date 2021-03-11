@@ -17,12 +17,12 @@ end
 function MOI.get(model::AbstractLPForm, ::MOI.ListOfModelAttributesSet)
     list = MOI.AbstractModelAttribute[]
     push!(list, MOI.ObjectiveSense())
-    if model.direction != MOI.FEASIBILITY_SENSE
+    if model.sense != MOI.FEASIBILITY_SENSE
         push!(list, MOI.ObjectiveFunction{MOI.get(model, MOI.ObjectiveFunctionType())}())
     end
     return list
 end
-MOI.get(model::AbstractLPForm, ::MOI.ObjectiveSense) = model.direction
+MOI.get(model::AbstractLPForm, ::MOI.ObjectiveSense) = model.sense
 function MOI.get(model::AbstractLPForm{T},
                  ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}) where T
     return _dot(model.c)
@@ -47,15 +47,24 @@ function MOI.get(model::AbstractLPForm{T}, ::MOI.ConstraintFunction,
     return _dot(model.A[ci.value, :])
 end
 
+"""
+    LPStandardForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
 
+Represents a problem of the form:
+```
+sense ⟨c, x⟩
+s.t.  A x == b
+      x ≥ 0
+```
+"""
 struct LPStandardForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
-    direction::MOI.OptimizationSense
+    sense::MOI.OptimizationSense
     c::VT
     A::AT
     b::VT
 end
 
-function MOI.get(model::LPStandardForm{T}, ::MOI.ListOfConstraints) where T
+function MOI.get(::LPStandardForm{T}, ::MOI.ListOfConstraints) where T
     return [(MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}),
             (MOI.VectorOfVariables, MOI.Nonnegatives)]
 end
@@ -77,7 +86,7 @@ function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet,
 end
 const NONNEG = MOI.ConstraintIndex{MOI.VectorOfVariables, MOI.Nonnegatives}
 function MOI.get(
-    model::LPStandardForm,
+    ::LPStandardForm,
     ::MOI.ListOfConstraintIndices{
         MOI.VectorOfVariables, MOI.Nonnegatives}
 )
@@ -92,14 +101,23 @@ function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet,
     return MOI.Nonnegatives(MOI.get(model, MOI.NumberOfVariables()))
 end
 
+"""
+    LPGeometricForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
+
+Represents a linear problem of the form:
+```
+sense ⟨c, x⟩
+s.t.  Ax <= b
+```
+"""
 struct LPGeometricForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: AbstractLPForm{T}
-    direction::MOI.OptimizationSense
+    sense::MOI.OptimizationSense
     c::VT
     A::AT
     b::VT
 end
 
-function MOI.get(model::LPGeometricForm{T}, ::MOI.ListOfConstraints) where T
+function MOI.get(::LPGeometricForm{T}, ::MOI.ListOfConstraints) where T
     return [(MOI.ScalarAffineFunction{T}, MOI.LessThan{T})]
 end
 const LT{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}, MOI.LessThan{T}}
@@ -175,15 +193,25 @@ function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.Single
         VBOUND{S}(vi.value)
     end)
 end
-function MOI.get(model::LPMixedForm, ::MOI.ConstraintFunction, ci::VBOUND)
+function MOI.get(::LPMixedForm, ::MOI.ConstraintFunction, ci::VBOUND)
     return MOI.SingleVariable(MOI.VariableIndex(ci.value))
 end
 function MOI.get(model::LPMixedForm, ::MOI.ConstraintSet, ci::VBOUND)
     return _bound_set(model.v_lb[ci.value], model.v_ub[ci.value])
 end
 
+"""
+    LPForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}}
+
+Represents a problem of the form:
+```
+sense ⟨c, x⟩
+s.t.  c_lb <= Ax <= c_ub
+      v_lb <=  x <= v_ub
+```
+"""
 struct LPForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: LPMixedForm{T} #, V<:AbstractVector{T} #, M<:AbstractMatrix{T}}
-    direction::MOI.OptimizationSense
+    sense::MOI.OptimizationSense
     c::VT
     A::AT
     c_lb::VT
@@ -199,8 +227,18 @@ function MOI.get(model::LPForm, ::MOI.ConstraintSet, ci::AFF)
     return _bound_set(model.c_lb[ci.value], model.c_ub[ci.value])
 end
 
+"""
+    LPSolverForm{T, AT<:AbstractMatrix{T}, VT<:AbstractVector{T}}
+
+Represents a problem of the form:
+```
+sense ⟨c, x⟩
+s.t. Ax senses b
+     v_lb <=  x <= v_ub
+```
+"""
 struct LPSolverForm{T, AT<:AbstractMatrix{T}, VT<:AbstractVector{T}} <: LPMixedForm{T}
-    direction::MOI.OptimizationSense
+    sense::MOI.OptimizationSense
     c::VT
     A::AT
     b::VT
@@ -225,6 +263,12 @@ function MOI.get(model::LPSolverForm, ::MOI.ConstraintSet, ci::AFF)
     end
 end
 
+"""
+    MILP{T, LP<:AbstractLPForm{T}}
+
+A mixed-integer problem represented by a linear problem of type `LP`
+and a vector indicating each `VariableType`.
+"""
 struct MILP{T, LP<:AbstractLPForm{T}}
     lp::LP
     variable_type::Vector{VariableType}
