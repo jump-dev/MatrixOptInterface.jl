@@ -85,6 +85,22 @@ function psd1(::Type{T}, ::Type{I}) where {T, I}
             T[-1, -1, -1, -1, -2, -1, -1, -1, -1, -2, -1, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1],
         )
     )
+    @test conic_form.Q === nothing
+
+    conic_form2 = MatOI.GeometricConicForm{T, MatOI.SparseMatrixCSRtoCSC{T, Int, I}, Vector{T}, Vector{T}, SparseMatrixCSC{T, Int}}([MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros])
+
+    MOI.set(
+        model,
+        MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{T}}(),
+        MOI.ScalarQuadraticFunction(
+            MOI.ScalarAffineTerm.([objXcoefs; one(T)], [X[objXidx]; x[1]]),
+            [MOI.ScalarQuadraticTerm(0.5, x[1], x[1])],
+            zero(T),
+        )
+    )
+    index_map = MOI.copy_to(conic_form2, model)
+    @test conic_form.Q !== nothing
+    @test sum(conic_form.Q) ≈ 0.5
 end
 
 # Taken from `MOI.Test.psdt2test`.
@@ -147,7 +163,7 @@ function psd2(::Type{T}, ::Type{I}, η::T = T(10), α::T = T(4)/T(5), δ::T = T(
     )
 end
 
-@testset "PSD $T, $I" for T in [Float64, BigFloat], I in [MatOI.ZeroBasedIndexing, MatOI.OneBasedIndexing]
+@testset "PSD $T, $I" for T in (Float64, BigFloat), I in (MatOI.ZeroBasedIndexing, MatOI.OneBasedIndexing)
     psd1(T, I)
     psd2(T, I)
 end

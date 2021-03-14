@@ -1,15 +1,15 @@
 
 """
-    GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
+    GeometricConicForm{T, AT, VB, VC, QT, C} <: MOI.ModelLike
 
 Represents an optimization model of the form:
 ```
-sense ⟨c, x⟩ + c0
+sense ⟨c, x⟩ + ⟨Qx, x⟩ + c0
 s.t.  b_i - A_i x ∈ C_i ∀ i
 ```
 with each `C_i` a cone defined in MOI.
 """
-mutable struct GeometricConicForm{T, AT, VB, VC, C} <: MOI.ModelLike
+mutable struct GeometricConicForm{T, AT, VB, VC, QT, C} <: MOI.ModelLike
     num_rows::Vector{Int}
     dimension::Dict{Int, Int}
     sense::MOI.OptimizationSense
@@ -17,11 +17,12 @@ mutable struct GeometricConicForm{T, AT, VB, VC, C} <: MOI.ModelLike
     A::Union{Nothing, AT} # The constraints
     b::VB          # `b - Ax in cones`
     c::VC          # `sense c'x + objective_constant`
+    Q::Union{QT, Nothing}
     cone_types::C
     cone_types_dict::Dict{DataType, Int}
 
-    function GeometricConicForm{T, AT, VB, VC}(cone_types) where {T, AT, VB, VC}
-        model = new{T, AT, VB, VC, typeof(cone_types)}()
+    function GeometricConicForm{T, AT, VB, VC, QT}(cone_types) where {T, AT, VB, VC, QT}
+        model = new{T, AT, VB, VC, QT, typeof(cone_types)}()
         model.cone_types = cone_types
         model.cone_types_dict = Dict{DataType, Int}(
             s => i for (i, s) in enumerate(cone_types)
@@ -29,8 +30,13 @@ mutable struct GeometricConicForm{T, AT, VB, VC, C} <: MOI.ModelLike
         model.num_rows = zeros(Int, length(cone_types))
         model.dimension = Dict{Int, Int}()
         model.A = nothing
+        model.Q = nothing
         return model
     end
+end
+
+function GeometricConicForm{T, AT, VB, VC}(cone_types) where {T, AT, VB, VC}
+    return GeometricConicForm{T, AT, VB, VC, SparseMatrixCSC{T,Int}}(cone_types)
 end
 
 function GeometricConicForm{T, AT, VT}(cone_types) where {T, AT, VT}
@@ -105,6 +111,20 @@ function MOI.set(model::GeometricConicForm{T}, ::MOI.ObjectiveFunction,
     return nothing
 end
 
+function MOI.set(model::GeometricConicForm{T, AT, VB, VC, QT}, ::MOI.ObjectiveFunction,
+    f::MOI.ScalarQuadraticFunction{T}) where {T, AT, VB, VC, QT}
+    c = Vector(sparsevec(variable_index_value.(f.affine_terms), MOI.coefficient.(f.affine_terms),
+               model.A.n))
+    model.objective_constant = f.constant
+    model.c = c
+    n = length(c)
+    Q = convert(QT, spzeros(T, n, n))
+    for term in f.quadratic_terms
+        Q[term.variable_index_1.value, term.variable_index_2.value] = term.coefficient
+    end
+    return nothing
+end
+
 function _allocate_constraint(model::GeometricConicForm, src, indexmap, cone_id, ci)
     # TODO use `CanonicalConstraintFunction`
     func = MOI.get(src, MOI.ConstraintFunction(), ci)
@@ -141,7 +161,7 @@ function _load_constraints(model::GeometricConicForm, src, indexmap, cone_offset
     end
 end
 
-function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where T
+function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where {T}
     MOI.empty!(dest)
 
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
