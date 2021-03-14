@@ -9,19 +9,19 @@ s.t.  b_i - A_i x ∈ C_i ∀ i
 ```
 with each `C_i` a cone defined in MOI.
 """
-mutable struct GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
+mutable struct GeometricConicForm{T, AT, VB, VC, C} <: MOI.ModelLike
     num_rows::Vector{Int}
     dimension::Dict{Int, Int}
     sense::MOI.OptimizationSense
     objective_constant::T # The objective
     A::Union{Nothing, AT} # The constraints
-    b::VT          # `b - Ax in cones`
-    c::VT          # `sense c'x + objective_constant`
+    b::VB          # `b - Ax in cones`
+    c::VC          # `sense c'x + objective_constant`
     cone_types::C
     cone_types_dict::Dict{DataType, Int}
 
-    function GeometricConicForm{T, AT, VT}(cone_types) where {T, AT, VT}
-        model = new{T, AT, VT, typeof(cone_types)}()
+    function GeometricConicForm{T, AT, VB, VC}(cone_types) where {T, AT, VB, VC}
+        model = new{T, AT, VB, VC, typeof(cone_types)}()
         model.cone_types = cone_types
         model.cone_types_dict = Dict{DataType, Int}(
             s => i for (i, s) in enumerate(cone_types)
@@ -31,6 +31,10 @@ mutable struct GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
         model.A = nothing
         return model
     end
+end
+
+function GeometricConicForm{T, AT, VT}(cone_types) where {T, AT, VT}
+    return GeometricConicForm{T, AT, VT, VT}(cone_types)
 end
 
 _set_type(::MOI.ConstraintIndex{F,S}) where {F,S} = S
@@ -68,7 +72,7 @@ function MOI.set(::GeometricConicForm, ::MOI.VariablePrimalStart,
                  ::MOI.VariableIndex, ::Nothing)
 end
 function MOI.set(model::GeometricConicForm{T}, ::MOI.VariablePrimalStart,
-                 vi::MOI.VariableIndex, value::T) where T
+                 vi::MOI.VariableIndex, value::T) where {T}
     model.primal[vi.value] = value
 end
 function MOI.set(::GeometricConicForm, ::MOI.ConstraintPrimalStart,
@@ -93,7 +97,7 @@ end
 variable_index_value(t::MOI.ScalarAffineTerm) = t.variable_index.value
 variable_index_value(t::MOI.VectorAffineTerm) = variable_index_value(t.scalar_term)
 function MOI.set(model::GeometricConicForm{T}, ::MOI.ObjectiveFunction,
-                 f::MOI.ScalarAffineFunction{T}) where T
+                 f::MOI.ScalarAffineFunction{T}) where {T}
     c = Vector(sparsevec(variable_index_value.(f.terms), MOI.coefficient.(f.terms),
                          model.A.n))
     model.objective_constant = f.constant
