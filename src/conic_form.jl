@@ -111,6 +111,20 @@ function MOI.set(model::GeometricConicForm{T}, ::MOI.ObjectiveFunction,
     return nothing
 end
 
+function MOI.set(model::GeometricConicForm{T, AT, VB, VC, QT}, ::MOI.ObjectiveFunction,
+    f::MOI.ScalarQuadraticFunction{T}) where {T, AT, VB, VC, QT}
+    c = Vector(sparsevec(variable_index_value.(f.affine_terms), MOI.coefficient.(f.affine_terms),
+               model.A.n))
+    model.objective_constant = f.constant
+    model.c = c
+    n = length(c)
+    Q = convert(QT, spzeros(T, n, n))
+    for term in f.quadratic_terms
+        Q[term.variable_index_1.value, term.variable_index_2.value] = term.coefficient
+    end
+    return nothing
+end
+
 function _allocate_constraint(model::GeometricConicForm, src, indexmap, cone_id, ci)
     # TODO use `CanonicalConstraintFunction`
     func = MOI.get(src, MOI.ConstraintFunction(), ci)
@@ -147,7 +161,7 @@ function _load_constraints(model::GeometricConicForm, src, indexmap, cone_offset
     end
 end
 
-function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where T
+function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where {T}
     MOI.empty!(dest)
 
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
