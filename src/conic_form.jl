@@ -94,7 +94,7 @@ end
 function MOI.set(model::GeometricConicForm, ::MOI.ObjectiveSense, sense::MOI.OptimizationSense)
     model.sense = sense
 end
-variable_index_value(t::MOI.ScalarAffineTerm) = t.variable_index.value
+variable_index_value(t::MOI.ScalarAffineTerm) = t.variable.value
 variable_index_value(t::MOI.VectorAffineTerm) = variable_index_value(t.scalar_term)
 function MOI.set(model::GeometricConicForm{T}, ::MOI.ObjectiveFunction,
                  f::MOI.ScalarAffineFunction{T}) where {T}
@@ -141,14 +141,14 @@ function _load_constraints(model::GeometricConicForm, src, indexmap, cone_offset
     end
 end
 
-function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names::Bool=true) where T
+function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike) where T
     MOI.empty!(dest)
 
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
     idxmap = MOIU.IndexMap()
 
     has_constraints = BitSet()
-    for (F, S) in MOI.get(src, MOI.ListOfConstraints())
+    for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
         i = get(dest.cone_types_dict, S, nothing)
         if i === nothing || F != MOI.VectorAffineFunction{T}
             throw(MOI.UnsupportedConstraint{F, S}())
@@ -167,10 +167,10 @@ function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike; copy_names
     _load_variables(dest, length(vis_src))
 
     # Set variable attributes
-    MOIU.pass_attributes(dest, src, copy_names, idxmap, vis_src)
+    MOIU.pass_attributes(dest, src, idxmap, vis_src)
 
     # Set model attributes
-    MOIU.pass_attributes(dest, src, copy_names, idxmap)
+    MOIU.pass_attributes(dest, src, idxmap)
 
     # Load constraints
     offset = 0

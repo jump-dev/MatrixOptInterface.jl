@@ -64,7 +64,7 @@ struct LPStandardForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: Abst
     b::VT
 end
 
-function MOI.get(::LPStandardForm{T}, ::MOI.ListOfConstraints) where T
+function MOI.get(::LPStandardForm{T}, ::MOI.ListOfConstraintTypesPresent) where T
     return [(MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}),
             (MOI.VectorOfVariables, MOI.Nonnegatives)]
 end
@@ -117,7 +117,7 @@ struct LPGeometricForm{T, AT<:AbstractMatrix{T}, VT <: AbstractVector{T}} <: Abs
     b::VT
 end
 
-function MOI.get(::LPGeometricForm{T}, ::MOI.ListOfConstraints) where T
+function MOI.get(::LPGeometricForm{T}, ::MOI.ListOfConstraintTypesPresent) where T
     return [(MOI.ScalarAffineFunction{T}, MOI.LessThan{T})]
 end
 const LT{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T}, MOI.LessThan{T}}
@@ -139,10 +139,10 @@ end
 
 abstract type LPMixedForm{T} <: AbstractLPForm{T} end
 
-function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraints) where T
+function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintTypesPresent) where T
     list = Tuple{DataType, DataType}[]
     for S in [MOI.EqualTo{T}, MOI.Interval{T}, MOI.GreaterThan{T}, MOI.LessThan{T}]
-        for F in [MOI.SingleVariable, MOI.ScalarAffineFunction{T}]
+        for F in [MOI.VariableIndex, MOI.ScalarAffineFunction{T}]
             if !iszero(MOI.get(model, MOI.NumberOfConstraints{F, S}()))
                 push!(list, (F, S))
             end
@@ -176,14 +176,14 @@ function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.Scalar
     ))
 end
 
-const VBOUND{S} = MOI.ConstraintIndex{MOI.SingleVariable, S}
-function MOI.get(model::LPMixedForm{T}, ::MOI.NumberOfConstraints{MOI.SingleVariable, S}) where {T, S <: LinearBounds{T}}
+const VBOUND{S} = MOI.ConstraintIndex{MOI.VariableIndex, S}
+function MOI.get(model::LPMixedForm{T}, ::MOI.NumberOfConstraints{MOI.VariableIndex, S}) where {T, S <: LinearBounds{T}}
     s = _sense(S)
     return count(MOI.get(model, MOI.ListOfVariableIndices())) do vi
         MOI.get(model, BoundSense(), vi) == s
     end
 end
-function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.SingleVariable, S}) where {T, S <: LinearBounds{T}}
+function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.VariableIndex, S}) where {T, S <: LinearBounds{T}}
     s = _sense(S)
     return collect(MOIU.LazyMap{VBOUND{S}}(
         Base.Iterators.Filter(MOI.get(model, MOI.ListOfVariableIndices())) do vi
@@ -194,7 +194,7 @@ function MOI.get(model::LPMixedForm{T}, ::MOI.ListOfConstraintIndices{MOI.Single
     end)
 end
 function MOI.get(::LPMixedForm, ::MOI.ConstraintFunction, ci::VBOUND)
-    return MOI.SingleVariable(MOI.VariableIndex(ci.value))
+    return MOI.VariableIndex(ci.value)
 end
 function MOI.get(model::LPMixedForm, ::MOI.ConstraintSet, ci::VBOUND)
     return _bound_set(model.v_lb[ci.value], model.v_ub[ci.value])

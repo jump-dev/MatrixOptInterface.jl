@@ -39,7 +39,7 @@ function final_touch(A::SparseMatrixCSRtoCSC)
 end
 function _allocate_terms(colptr, indexmap, terms)
     for term in terms
-        colptr[indexmap[term.scalar_term.variable_index].value + 1] += 1
+        colptr[indexmap[term.scalar_term.variable].value + 1] += 1
     end
 end
 function allocate_terms(A::SparseMatrixCSRtoCSC, indexmap, func)
@@ -47,7 +47,7 @@ function allocate_terms(A::SparseMatrixCSRtoCSC, indexmap, func)
 end
 function _load_terms(colptr, rowval, nzval, indexmap, terms, offset)
     for term in terms
-        ptr = colptr[indexmap[term.scalar_term.variable_index].value] += 1
+        ptr = colptr[indexmap[term.scalar_term.variable].value] += 1
         rowval[ptr] = offset + term.output_index
         nzval[ptr] = -term.scalar_term.coefficient
     end
