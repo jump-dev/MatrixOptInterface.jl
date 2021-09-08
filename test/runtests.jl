@@ -47,11 +47,9 @@ const dense_A = [1.0 2.0
 
             function test_expected(form)
                 MOI.copy_to(MOI.Bridges.Constraint.Scalarize{Float64}(model), form)
-                # TODO: `ConstraintName`s are not supported for `VariableIndex` constraints.
-                # MOI.set(model, MOI.VariableName(), MOI.VariableIndex.(1:2), var_names)
-                # MOI.set(model, MOI.ConstraintName(), MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}.(1:2), con_names)
-                # MOI.set(model, MOI.ConstraintName(), MOI.ConstraintIndex{MOI.VariableIndex, MOI.GreaterThan{Float64}}.(1:2), vcon_names)
-                # MOIT.util_test_models_equal(model, expected, var_names, [con_names; vcon_names])
+                MOI.set(model, MOI.VariableName(), MOI.VariableIndex.(1:2), var_names)
+                MOI.set(model, MOI.ConstraintName(), MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}.(1:2), con_names)
+                MOIT.util_test_models_equal(model, expected, var_names, con_names)
             end
 
             @testset "change $(typeof(lp))" for lp in [
