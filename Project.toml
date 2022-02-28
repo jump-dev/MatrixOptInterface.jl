@@ -1,7 +1,7 @@
 name = "MatrixOptInterface"
 uuid = "2f4eb8e6-3e35-4ae4-8c7a-f3d7d9bf20ed"
 authors = ["JuMP-dev"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
