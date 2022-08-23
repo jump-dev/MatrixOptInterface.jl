@@ -1,3 +1,8 @@
+# Copyright (c) 2019: Joaquim Dias Garcia, and contributors
+#
+# Use of this source code is governed by an MIT-style license that can be found
+# in the LICENSE.md file or at https://opensource.org/licenses/MIT.
+
 module MatrixOptInterface
 
 using LinearAlgebra, SparseArrays
@@ -7,8 +12,6 @@ const MOIU = MathOptInterface.Utilities
 
 const CI = MOI.ConstraintIndex
 const VI = MOI.VariableIndex
-
-# export MatrixOptimizer
 
 @enum ConstraintSense EQUAL_TO GREATER_THAN LESS_THAN INTERVAL
 _sense(::Type{<:MOI.EqualTo}) = EQUAL_TO
@@ -39,7 +42,7 @@ function _bound_sense(lb::T, ub::T) where {T}
     end
 end
 
-function _bound_set(lb::T, ub::T) where T
+function _bound_set(lb::T, ub::T) where {T}
     if _no_upper(ub)
         if _no_lower(lb)
             if ub == lb
