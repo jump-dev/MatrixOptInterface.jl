@@ -1,17 +1,20 @@
-function change_form(::Type{LPForm{T, AT, VT}}, lp::LPForm) where {T, AT, VT}
-    return LPForm{T, AT, VT}(
+function change_form(::Type{LPForm{T,AT,VT}}, lp::LPForm) where {T,AT,VT}
+    return LPForm{T,AT,VT}(
         lp.sense,
         lp.c,
         lp.A,
         lp.c_lb,
         lp.c_ub,
         lp.v_lb,
-        lp.v_ub
+        lp.v_ub,
     )
 end
 
-function change_form(::Type{LPForm{T, AT, VT}}, lp::LPStandardForm{T}) where {T, AT, VT}
-    return LPForm{T, AT, VT}(
+function change_form(
+    ::Type{LPForm{T,AT,VT}},
+    lp::LPStandardForm{T},
+) where {T,AT,VT}
+    return LPForm{T,AT,VT}(
         lp.sense,
         lp.c,
         lp.A,
@@ -21,8 +24,11 @@ function change_form(::Type{LPForm{T, AT, VT}}, lp::LPStandardForm{T}) where {T,
         fill(typemax(T), length(lp.c)),
     )
 end
-function change_form(::Type{LPForm{T, AT, VT}}, lp::LPGeometricForm{T}) where {T, AT, VT}
-    return LPForm{T, AT, VT}(
+function change_form(
+    ::Type{LPForm{T,AT,VT}},
+    lp::LPGeometricForm{T},
+) where {T,AT,VT}
+    return LPForm{T,AT,VT}(
         lp.sense,
         lp.c,
         lp.A,
@@ -32,7 +38,10 @@ function change_form(::Type{LPForm{T, AT, VT}}, lp::LPGeometricForm{T}) where {T
         fill(typemax(T), length(lp.c)),
     )
 end
-function change_form(::Type{LPForm{T, AT, VT}}, lp::LPSolverForm{T}) where {T, AT, VT}
+function change_form(
+    ::Type{LPForm{T,AT,VT}},
+    lp::LPSolverForm{T},
+) where {T,AT,VT}
     c_lb = fill(typemin(T), length(lp.b))
     c_ub = fill(typemax(T), length(lp.b))
     for i in eachindex(lp.b)
@@ -47,26 +56,19 @@ function change_form(::Type{LPForm{T, AT, VT}}, lp::LPSolverForm{T}) where {T, A
             error("invalid sign $(lp.senses[i])")
         end
     end
-    return LPForm{T, AT, VT}(
-        lp.sense,
-        lp.c,
-        lp.A,
-        c_lb,
-        c_ub,
-        lp.v_lb,
-        lp.v_ub,
-    )
+    return LPForm{T,AT,VT}(lp.sense, lp.c, lp.A, c_lb, c_ub, lp.v_lb, lp.v_ub)
 end
 
-function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::LPGeometricForm) where {T, AT, VT}
-    return LPGeometricForm{T, AT, VT}(
-        lp.sense,
-        lp.c,
-        lp.A,
-        lp.b
-    )
+function change_form(
+    ::Type{LPGeometricForm{T,AT,VT}},
+    lp::LPGeometricForm,
+) where {T,AT,VT}
+    return LPGeometricForm{T,AT,VT}(lp.sense, lp.c, lp.A, lp.b)
 end
-function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::LPForm{T}) where {T, AT, VT}
+function change_form(
+    ::Type{LPGeometricForm{T,AT,VT}},
+    lp::LPForm{T},
+) where {T,AT,VT}
     has_c_upper = Int[]
     has_c_lower = Int[]
     sizehint!(has_c_upper, length(lp.c_ub))
@@ -93,73 +95,68 @@ function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::LPForm{T}) where {T
     end
     Id = Matrix{T}(I, length(lp.c), length(lp.c))
     new_A = vcat(
-        lp.A[has_c_upper,:],
-        -lp.A[has_c_lower,:],
-        Id[has_v_upper,:],
-        -Id[has_v_lower,:],
-                )
+        lp.A[has_c_upper, :],
+        -lp.A[has_c_lower, :],
+        Id[has_v_upper, :],
+        -Id[has_v_lower, :],
+    )
     new_b = vcat(
         lp.c_ub[has_c_upper],
         -lp.c_lb[has_c_lower],
         lp.v_ub[has_v_upper],
         -lp.v_lb[has_v_lower],
     )
-    return LPGeometricForm{T, AT, VT}(
-        lp.sense,
-        lp.c,
-        new_A,
-        new_b
-    )
+    return LPGeometricForm{T,AT,VT}(lp.sense, lp.c, new_A, new_b)
 end
-function change_form(::Type{LPGeometricForm{T, AT, VT}}, lp::F) where {T, AT, VT, F <: AbstractLPForm{T}}
-    temp_lp = change_form(LPForm{T, AT, VT}, lp)
-    return change_form(LPGeometricForm{T, AT, VT}, temp_lp)
+function change_form(
+    ::Type{LPGeometricForm{T,AT,VT}},
+    lp::F,
+) where {T,AT,VT,F<:AbstractLPForm{T}}
+    temp_lp = change_form(LPForm{T,AT,VT}, lp)
+    return change_form(LPGeometricForm{T,AT,VT}, temp_lp)
 end
 
-function change_form(::Type{LPStandardForm{T, AT, VT}}, lp::LPStandardForm) where {T, AT, VT}
-    return LPStandardForm(
-        lp.sense,
-        lp.c,
-        lp.A,
-        lp.b
-    )
+function change_form(
+    ::Type{LPStandardForm{T,AT,VT}},
+    lp::LPStandardForm,
+) where {T,AT,VT}
+    return LPStandardForm(lp.sense, lp.c, lp.A, lp.b)
 end
-function change_form(::Type{LPStandardForm{T, AT, VT}}, lp::LPGeometricForm{T}) where {T, AT, VT}
-    new_A = hcat(
-        lp.A,
-        -lp.A,
-        AT(I, length(lp.b), length(lp.b))
-    )
-    new_c = vcat(
-        lp.c,
-        -lp.c,
-        fill(0.0, length(lp.b))
-    )
-    return LPStandardForm{T, AT, VT}(
-        lp.sense,
-        new_c,
-        new_A,
-        copy(lp.b)
-    )
+function change_form(
+    ::Type{LPStandardForm{T,AT,VT}},
+    lp::LPGeometricForm{T},
+) where {T,AT,VT}
+    new_A = hcat(lp.A, -lp.A, AT(I, length(lp.b), length(lp.b)))
+    new_c = vcat(lp.c, -lp.c, fill(0.0, length(lp.b)))
+    return LPStandardForm{T,AT,VT}(lp.sense, new_c, new_A, copy(lp.b))
 end
-function change_form(::Type{LPStandardForm{T, AT, VT}}, lp::F) where {T, AT, VT, F <: AbstractLPForm{T}}
-    temp_lp = change_form(LPForm{T, AT, VT}, lp)
-    new_lp = change_form(LPGeometricForm{T, AT, VT}, temp_lp)
-    change_form(LPStandardForm{T, AT, VT}, new_lp)
+function change_form(
+    ::Type{LPStandardForm{T,AT,VT}},
+    lp::F,
+) where {T,AT,VT,F<:AbstractLPForm{T}}
+    temp_lp = change_form(LPForm{T,AT,VT}, lp)
+    new_lp = change_form(LPGeometricForm{T,AT,VT}, temp_lp)
+    return change_form(LPStandardForm{T,AT,VT}, new_lp)
 end
 
-function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPSolverForm) where {T, AT, VT}
-    return LPSolverForm{T, AT, VT}(
+function change_form(
+    ::Type{LPSolverForm{T,AT,VT}},
+    lp::LPSolverForm,
+) where {T,AT,VT}
+    return LPSolverForm{T,AT,VT}(
         lp.sense,
         lp.c,
         lp.A,
         lp.b,
         lp.senses,
         lp.v_lb,
-        lp.v_ub
+        lp.v_ub,
     )
 end
-function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPForm{T}) where {T, AT, VT}
+function change_form(
+    ::Type{LPSolverForm{T,AT,VT}},
+    lp::LPForm{T},
+) where {T,AT,VT}
     new_A = copy(lp.A)
     senses = fill(LESS_THAN, length(lp.c_lb))
     new_b = fill(NaN, length(lp.c_lb))
@@ -172,7 +169,7 @@ function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPForm{T}) where {T, A
             new_b[i] = lp.c_lb[i]
             push!(new_b, lp.c_ub[i])
             push!(sense, LESS_THAN)
-            new_A = vcat(new_A, lp.A[i,:])
+            new_A = vcat(new_A, lp.A[i, :])
         elseif lp.c_lb[i] > -Inf
             senses[i] = GREATER_THAN
             new_b[i] = lp.c_lb[i]
@@ -181,7 +178,7 @@ function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPForm{T}) where {T, A
             new_b[i] = lp.c_ub[i]
         end
     end
-    return LPSolverForm{T, AT, VT}(
+    return LPSolverForm{T,AT,VT}(
         lp.sense,
         lp.c,
         new_A,
@@ -191,7 +188,10 @@ function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::LPForm{T}) where {T, A
         lp.v_ub,
     )
 end
-function change_form(::Type{LPSolverForm{T, AT, VT}}, lp::F) where {T, AT, VT, F <: AbstractLPForm{T}}
-    temp_lp = change_form(LPForm{T, AT, VT}, lp)
-    change_form(LPSolverForm{T, AT, VT}, temp_lp)
+function change_form(
+    ::Type{LPSolverForm{T,AT,VT}},
+    lp::F,
+) where {T,AT,VT,F<:AbstractLPForm{T}}
+    temp_lp = change_form(LPForm{T,AT,VT}, lp)
+    return change_form(LPSolverForm{T,AT,VT}, temp_lp)
 end

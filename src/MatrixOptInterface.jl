@@ -39,7 +39,7 @@ function _bound_sense(lb::T, ub::T) where {T}
     end
 end
 
-function _bound_set(lb::T, ub::T) where T
+function _bound_set(lb::T, ub::T) where {T}
     if _no_upper(ub)
         if _no_lower(lb)
             if ub == lb
