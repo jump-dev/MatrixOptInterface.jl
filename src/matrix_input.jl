@@ -1,3 +1,8 @@
+# Copyright (c) 2019: Joaquim Dias Garcia, and contributors
+#
+# Use of this source code is governed by an MIT-style license that can be found
+# in the LICENSE.md file or at https://opensource.org/licenses/MIT.
+
 abstract type AbstractLPForm{T} <: MOI.ModelLike end
 
 # FIXME Taken from Polyhedra.jl, we should maybe move this to MOIU
@@ -12,6 +17,7 @@ function _dot_terms(a::AbstractVector{T}) where {T}
         i in structural_nonzero_indices(a) if !iszero(a[i])
     ]
 end
+
 function _dot(a::AbstractVector{T}) where {T}
     return MOI.ScalarAffineFunction(_dot_terms(a), zero(T))
 end
@@ -27,13 +33,16 @@ function MOI.get(model::AbstractLPForm, ::MOI.ListOfModelAttributesSet)
     end
     return list
 end
+
 MOI.get(model::AbstractLPForm, ::MOI.ObjectiveSense) = model.sense
+
 function MOI.get(
     model::AbstractLPForm{T},
     ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}},
 ) where {T}
     return _dot(model.c)
 end
+
 function MOI.get(
     model::AbstractLPForm{T},
     ::MOI.ObjectiveFunctionType,
@@ -44,9 +53,12 @@ end
 function MOI.get(::AbstractLPForm, ::MOI.ListOfVariableAttributesSet)
     return MOI.AbstractVariableAttribute[]
 end
+
 MOI.get(model::AbstractLPForm, ::MOI.NumberOfVariables) = length(model.c)
+
 function MOI.get(model::AbstractLPForm, ::MOI.ListOfVariableIndices)
-    # TODO return `collect` with MOI v0.9.15 (see https://github.com/jump-dev/MathOptInterface.jl/pull/1110)
+    # TODO return `collect` with MOI v0.9.15 (see
+    # https://github.com/jump-dev/MathOptInterface.jl/pull/1110)
     return collect(
         MOIU.LazyMap{MOI.VariableIndex}(
             i -> MOI.VariableIndex(i), # FIXME `LazyMap` needs a `Function` so cannot just give `MOI.VariableIndex`
@@ -58,6 +70,7 @@ end
 function MOI.get(::AbstractLPForm, ::MOI.ListOfConstraintAttributesSet)
     return MOI.AbstractConstraintAttribute[]
 end
+
 function MOI.get(
     model::AbstractLPForm{T},
     ::MOI.ConstraintFunction,
@@ -93,7 +106,9 @@ function MOI.get(
         (MOI.VectorOfVariables, MOI.Nonnegatives),
     ]
 end
+
 const EQ{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T},MOI.EqualTo{T}}
+
 function MOI.get(
     model::LPStandardForm{T},
     ::MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{T},MOI.EqualTo{T}},
@@ -104,19 +119,24 @@ function MOI.get(
         1:size(model.A, 1),
     ))
 end
+
 function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet, ci::EQ)
     return MOI.EqualTo(model.b[ci.value])
 end
+
 const NONNEG = MOI.ConstraintIndex{MOI.VectorOfVariables,MOI.Nonnegatives}
+
 function MOI.get(
     ::LPStandardForm,
     ::MOI.ListOfConstraintIndices{MOI.VectorOfVariables,MOI.Nonnegatives},
 )
     return [NONNEG(1)]
 end
+
 function MOI.get(model::LPStandardForm, ::MOI.ConstraintFunction, ci::NONNEG)
     return MOI.VectorOfVariables(MOI.get(model, MOI.ListOfVariableIndices()))
 end
+
 function MOI.get(model::LPStandardForm, ::MOI.ConstraintSet, ci::NONNEG)
     return MOI.Nonnegatives(MOI.get(model, MOI.NumberOfVariables()))
 end
@@ -144,7 +164,9 @@ function MOI.get(
 ) where {T}
     return [(MOI.ScalarAffineFunction{T}, MOI.LessThan{T})]
 end
+
 const LT{T} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T},MOI.LessThan{T}}
+
 function MOI.get(
     model::LPGeometricForm{T},
     ::MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{T},MOI.LessThan{T}},
@@ -155,6 +177,7 @@ function MOI.get(
         1:size(model.A, 1),
     ))
 end
+
 function MOI.get(model::LPGeometricForm, ::MOI.ConstraintSet, ci::LT)
     return MOI.LessThan(model.b[ci.value])
 end
@@ -178,6 +201,7 @@ function MOI.get(
 end
 
 struct BoundSense <: MOI.AbstractVariableAttribute end
+
 function MOI.get(model::LPMixedForm, ::BoundSense, vi::MOI.VariableIndex)
     return _bound_sense(model.v_lb[vi.value], model.v_ub[vi.value])
 end
@@ -194,7 +218,9 @@ function MOI.get(
         return _constraint_bound_sense(model, i) == s
     end
 end
+
 const AFF{T,S} = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T},S}
+
 function MOI.get(
     model::LPMixedForm{T},
     ::MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{T},S},
@@ -212,6 +238,7 @@ function MOI.get(
 end
 
 const VBOUND{S} = MOI.ConstraintIndex{MOI.VariableIndex,S}
+
 function MOI.get(
     model::LPMixedForm{T},
     ::MOI.NumberOfConstraints{MOI.VariableIndex,S},
@@ -221,6 +248,7 @@ function MOI.get(
         return MOI.get(model, BoundSense(), vi) == s
     end
 end
+
 function MOI.get(
     model::LPMixedForm{T},
     ::MOI.ListOfConstraintIndices{MOI.VariableIndex,S},
@@ -238,9 +266,11 @@ function MOI.get(
         end,
     )
 end
+
 function MOI.get(::LPMixedForm, ::MOI.ConstraintFunction, ci::VBOUND)
     return MOI.VariableIndex(ci.value)
 end
+
 function MOI.get(model::LPMixedForm, ::MOI.ConstraintSet, ci::VBOUND)
     return _bound_set(model.v_lb[ci.value], model.v_ub[ci.value])
 end
@@ -268,6 +298,7 @@ end
 function _constraint_bound_sense(model::LPForm, i)
     return _bound_sense(model.c_lb[i], model.c_ub[i])
 end
+
 function MOI.get(model::LPForm, ::MOI.ConstraintSet, ci::AFF)
     return _bound_set(model.c_lb[ci.value], model.c_ub[ci.value])
 end
@@ -296,6 +327,7 @@ end
 function _constraint_bound_sense(model::LPSolverForm, i)
     return model.senses[i]
 end
+
 function MOI.get(model::LPSolverForm, ::MOI.ConstraintSet, ci::AFF)
     s = model.senses[ci.value]
     β = model.b[ci.value]

@@ -1,3 +1,8 @@
+# Copyright (c) 2019: Joaquim Dias Garcia, and contributors
+#
+# Use of this source code is governed by an MIT-style license that can be found
+# in the LICENSE.md file or at https://opensource.org/licenses/MIT.
+
 function change_form(::Type{LPForm{T,AT,VT}}, lp::LPForm) where {T,AT,VT}
     return LPForm{T,AT,VT}(
         lp.sense,
@@ -24,6 +29,7 @@ function change_form(
         fill(typemax(T), length(lp.c)),
     )
 end
+
 function change_form(
     ::Type{LPForm{T,AT,VT}},
     lp::LPGeometricForm{T},
@@ -38,6 +44,7 @@ function change_form(
         fill(typemax(T), length(lp.c)),
     )
 end
+
 function change_form(
     ::Type{LPForm{T,AT,VT}},
     lp::LPSolverForm{T},
@@ -65,6 +72,7 @@ function change_form(
 ) where {T,AT,VT}
     return LPGeometricForm{T,AT,VT}(lp.sense, lp.c, lp.A, lp.b)
 end
+
 function change_form(
     ::Type{LPGeometricForm{T,AT,VT}},
     lp::LPForm{T},
@@ -108,6 +116,7 @@ function change_form(
     )
     return LPGeometricForm{T,AT,VT}(lp.sense, lp.c, new_A, new_b)
 end
+
 function change_form(
     ::Type{LPGeometricForm{T,AT,VT}},
     lp::F,
@@ -122,6 +131,7 @@ function change_form(
 ) where {T,AT,VT}
     return LPStandardForm(lp.sense, lp.c, lp.A, lp.b)
 end
+
 function change_form(
     ::Type{LPStandardForm{T,AT,VT}},
     lp::LPGeometricForm{T},
@@ -130,6 +140,7 @@ function change_form(
     new_c = vcat(lp.c, -lp.c, fill(0.0, length(lp.b)))
     return LPStandardForm{T,AT,VT}(lp.sense, new_c, new_A, copy(lp.b))
 end
+
 function change_form(
     ::Type{LPStandardForm{T,AT,VT}},
     lp::F,
@@ -153,6 +164,7 @@ function change_form(
         lp.v_ub,
     )
 end
+
 function change_form(
     ::Type{LPSolverForm{T,AT,VT}},
     lp::LPForm{T},
@@ -188,6 +200,7 @@ function change_form(
         lp.v_ub,
     )
 end
+
 function change_form(
     ::Type{LPSolverForm{T,AT,VT}},
     lp::F,

@@ -1,3 +1,8 @@
+# Copyright (c) 2019: Joaquim Dias Garcia, and contributors
+#
+# Use of this source code is governed by an MIT-style license that can be found
+# in the LICENSE.md file or at https://opensource.org/licenses/MIT.
+
 function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
     @test A.m == B.m
     @test A.n == B.n
@@ -5,6 +10,7 @@ function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
     @test A.rowval == B.rowval
     @test A.colptr == B.colptr
 end
+
 function _test_matrix_equal(
     A::MatOI.SparseMatrixCSRtoCSC{Tv,Ti,I},
     B::SparseMatrixCSC,

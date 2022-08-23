@@ -1,3 +1,7 @@
+# Copyright (c) 2019: Joaquim Dias Garcia, and contributors
+#
+# Use of this source code is governed by an MIT-style license that can be found
+# in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
 """
     GeometricConicForm{T, AT, VT, C} <: MOI.ModelLike
@@ -80,7 +84,10 @@ function MOI.set(
     ::MOI.VariablePrimalStart,
     ::MOI.VariableIndex,
     ::Nothing,
-) end
+)
+    return
+end
+
 function MOI.set(
     model::GeometricConicForm{T},
     ::MOI.VariablePrimalStart,
@@ -89,12 +96,16 @@ function MOI.set(
 ) where {T}
     return model.primal[vi.value] = value
 end
+
 function MOI.set(
     ::GeometricConicForm,
     ::MOI.ConstraintPrimalStart,
     ::MOI.ConstraintIndex,
     ::Nothing,
-) end
+)
+    return
+end
+
 function MOI.set(
     model::GeometricConicForm,
     ::MOI.ConstraintPrimalStart,
@@ -104,12 +115,16 @@ function MOI.set(
     offset = constroffset(model, ci)
     return model.slack[rows(model, ci)] .= value
 end
+
 function MOI.set(
     ::GeometricConicForm,
     ::MOI.ConstraintDualStart,
     ::MOI.ConstraintIndex,
     ::Nothing,
-) end
+)
+    return
+end
+
 function MOI.set(
     model::GeometricConicForm,
     ::MOI.ConstraintDualStart,
@@ -119,6 +134,7 @@ function MOI.set(
     offset = constroffset(model, ci)
     return model.dual[rows(model, ci)] .= value
 end
+
 function MOI.set(
     model::GeometricConicForm,
     ::MOI.ObjectiveSense,
@@ -126,10 +142,13 @@ function MOI.set(
 )
     return model.sense = sense
 end
+
 variable_index_value(t::MOI.ScalarAffineTerm) = t.variable.value
+
 function variable_index_value(t::MOI.VectorAffineTerm)
     return variable_index_value(t.scalar_term)
 end
+
 function MOI.set(
     model::GeometricConicForm{T},
     ::MOI.ObjectiveFunction,
@@ -144,7 +163,7 @@ function MOI.set(
     )
     model.objective_constant = f.constant
     model.c = c
-    return nothing
+    return
 end
 
 function _allocate_constraint(
@@ -207,10 +226,8 @@ end
 
 function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike) where {T}
     MOI.empty!(dest)
-
     vis_src = MOI.get(src, MOI.ListOfVariableIndices())
     idxmap = MOIU.IndexMap()
-
     has_constraints = BitSet()
     for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
         i = get(dest.cone_types_dict, S, nothing)
@@ -219,31 +236,23 @@ function MOI.copy_to(dest::GeometricConicForm{T}, src::MOI.ModelLike) where {T}
         end
         push!(has_constraints, i)
     end
-
     _allocate_variables(dest, vis_src, idxmap)
-
     # Allocate constraints
     caches = map(collect(has_constraints)) do i
         return _allocate_constraints(dest, src, idxmap, i, dest.cone_types[i])
     end
-
     # Load variables
     _load_variables(dest, length(vis_src))
-
     # Set variable attributes
     MOIU.pass_attributes(dest, src, idxmap, vis_src)
-
     # Set model attributes
     MOIU.pass_attributes(dest, src, idxmap)
-
     # Load constraints
     offset = 0
     for (i, cache) in zip(has_constraints, caches)
         _load_constraints(dest, src, idxmap, offset, i, cache)
         offset += dest.num_rows[i]
     end
-
     final_touch(dest.A)
-
     return idxmap
 end
