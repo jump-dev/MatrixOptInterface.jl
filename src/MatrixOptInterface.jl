@@ -68,5 +68,6 @@ include("sparse_matrix.jl")
 include("conic_form.jl")
 include("matrix_input.jl")
 include("change_form.jl")
+include("moi_to_lp.jl")
 
 end

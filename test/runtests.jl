@@ -17,6 +17,7 @@ const ATOL = 1e-4
 const RTOL = 1e-4
 
 include("conic_form.jl")
+include("moi_to_lp.jl")
 
 const dense_A = [
     1.0 2.0
