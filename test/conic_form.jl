@@ -11,25 +11,6 @@ function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
     @test A.colptr == B.colptr
 end
 
-function _test_matrix_equal(
-    A::MatOI.SparseMatrixCSRtoCSC{Tv,Ti,I},
-    B::SparseMatrixCSC,
-) where {Tv,Ti,I}
-    @test A.m == B.m
-    @test A.n == B.n
-    @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
-    if I <: MatOI.OneBasedIndexing
-        @test A.rowval == B.rowval
-        @test A.colptr == B.colptr
-    else
-        @test A.rowval == B.rowval .- 1
-        @test A.colptr == B.colptr .- 1
-    end
-    sA = convert(typeof(B), A)
-    @test typeof(sA) == typeof(B)
-    return _test_matrix_equal(sA, B)
-end
-
 # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
 function psd1(::Type{T}, ::Type{I}) where {T,I}
     # We use `MockOptimizer` to have indices xor'ed so that it tests that we don't assumes they are `1:n`.
@@ -93,7 +74,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
 
     conic_form = MatOI.GeometricConicForm{
         T,
-        MatOI.SparseMatrixCSRtoCSC{T,Int,I},
+        MOI.Utilities.MutableSparseMatrixCSC{T,Int,I},
         Vector{T},
     }([
         MOI.PositiveSemidefiniteConeTriangle,
@@ -319,7 +300,7 @@ function psd2(
 end
 
 @testset "PSD $T, $I" for T in [Float64, BigFloat],
-    I in [MatOI.ZeroBasedIndexing, MatOI.OneBasedIndexing]
+    I in [MOI.Utilities.ZeroBasedIndexing, MOI.Utilities.OneBasedIndexing]
 
     psd1(T, I)
     psd2(T, I)
