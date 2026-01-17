@@ -80,7 +80,8 @@ function MOI.get(
 end
 
 # We cannot use MOI.Utilities.Hyperrectangle in case the vector type is not `Vector`
-struct Hyperrectangle{T,LT<:AbstractVector{T},UT<:AbstractVector{T}} <: MOI.Utilities.AbstractVectorBounds
+struct Hyperrectangle{T,LT<:AbstractVector{T},UT<:AbstractVector{T}} <:
+       MOI.Utilities.AbstractVectorBounds
     lower::LT
     upper::UT
 end
@@ -90,12 +91,18 @@ MOI.Utilities.function_constants(::Hyperrectangle{T}, row) where {T} = zero(T)
 # TODO specialize for SparseVector
 function linear_function(c::AbstractVector{T}) where {T}
     return MOI.ScalarAffineFunction(
-        [MOI.ScalarAffineTerm(c[i], MOI.VariableIndex(i)) for i in eachindex(c)],
+        [
+            MOI.ScalarAffineTerm(c[i], MOI.VariableIndex(i)) for
+            i in eachindex(c)
+        ],
         zero(T),
     )
 end
 
-function linear_objective(sense::MOI.OptimizationSense, c::AbstractVector{T}) where {T}
+function linear_objective(
+    sense::MOI.OptimizationSense,
+    c::AbstractVector{T},
+) where {T}
     model = MOI.Utilities.ObjectiveContainer{T}()
     MOI.set(model, MOI.ObjectiveSense(), sense)
     func = linear_function(c)
@@ -113,21 +120,14 @@ function MOI.Utilities.extract_function(
     for col in axes(A, 2)
         val = A[row, col]
         if !iszero(val)
-            push!(
-                func.terms,
-                MOI.ScalarAffineTerm(val, MOI.VariableIndex(col)),
-            )
+            push!(func.terms, MOI.ScalarAffineTerm(val, MOI.VariableIndex(col)))
         end
     end
     return func
 end
 
 # Copy-paste of MOI.Utilities.MutableSparseMatrixCSC
-function _first_in_column(
-    A::SparseMatrixCSC,
-    row::Integer,
-    col::Integer,
-)
+function _first_in_column(A::SparseMatrixCSC, row::Integer, col::Integer)
     range = SparseArrays.nzrange(A, col)
     idx = searchsortedfirst(view(A.rowval, range), row)
     return get(range, idx, last(range) + 1)
@@ -173,7 +173,10 @@ function nonnegative_variables(n, ::Type{T}) where {T}
     return model
 end
 
-function interval_variables(lower::AbstractVector{T}, upper::AbstractVector{T}) where {T}
+function interval_variables(
+    lower::AbstractVector{T},
+    upper::AbstractVector{T},
+) where {T}
     @assert eachindex(lower) == eachindex(upper)
     model = MOI.Utilities.VariablesContainer{T}()
     for i in eachindex(lower)
@@ -184,15 +187,18 @@ function interval_variables(lower::AbstractVector{T}, upper::AbstractVector{T}) 
     return model
 end
 
-MOI.Utilities.@product_of_sets(
-    EqualTos,
-    MOI.EqualTo{T},
-)
+MOI.Utilities.@product_of_sets(EqualTos, MOI.EqualTo{T},)
 
-function equality_constraints(A::AbstractMatrix{T}, b::AbstractVector{T}) where {T}
+function equality_constraints(
+    A::AbstractMatrix{T},
+    b::AbstractVector{T},
+) where {T}
     sets = EqualTos{T}()
     for _ in eachindex(b)
-        MOI.Utilities.add_set(sets, MOI.Utilities.set_index(sets, MOI.EqualTo{T}))
+        MOI.Utilities.add_set(
+            sets,
+            MOI.Utilities.set_index(sets, MOI.EqualTo{T}),
+        )
     end
     MOI.Utilities.final_touch(sets)
     constants = Hyperrectangle(b, b)
@@ -201,15 +207,18 @@ function equality_constraints(A::AbstractMatrix{T}, b::AbstractVector{T}) where 
     return model
 end
 
-MOI.Utilities.@product_of_sets(
-    LessThans,
-    MOI.LessThan{T},
-)
+MOI.Utilities.@product_of_sets(LessThans, MOI.LessThan{T},)
 
-function lessthan_constraints(A::AbstractMatrix{T}, b::AbstractVector{T}) where {T}
+function lessthan_constraints(
+    A::AbstractMatrix{T},
+    b::AbstractVector{T},
+) where {T}
     sets = LessThans{T}()
     for _ in eachindex(b)
-        MOI.Utilities.add_set(sets, MOI.Utilities.set_index(sets, MOI.LessThan{T}))
+        MOI.Utilities.add_set(
+            sets,
+            MOI.Utilities.set_index(sets, MOI.LessThan{T}),
+        )
     end
     MOI.Utilities.final_touch(sets)
     constants = Hyperrectangle(FillArrays.Zeros{T}(length(b)), b)
@@ -218,15 +227,19 @@ function lessthan_constraints(A::AbstractMatrix{T}, b::AbstractVector{T}) where 
     return model
 end
 
-MOI.Utilities.@product_of_sets(
-    Intervals,
-    MOI.Interval{T},
-)
+MOI.Utilities.@product_of_sets(Intervals, MOI.Interval{T},)
 
-function interval_constraints(A::AbstractMatrix{T}, lower::AbstractVector{T}, upper::AbstractVector{T}) where {T}
+function interval_constraints(
+    A::AbstractMatrix{T},
+    lower::AbstractVector{T},
+    upper::AbstractVector{T},
+) where {T}
     sets = Intervals{T}()
     for _ in eachindex(lower)
-        MOI.Utilities.add_set(sets, MOI.Utilities.set_index(sets, MOI.Interval{T}))
+        MOI.Utilities.add_set(
+            sets,
+            MOI.Utilities.set_index(sets, MOI.Interval{T}),
+        )
     end
     MOI.Utilities.final_touch(sets)
     constants = Hyperrectangle(lower, upper)
@@ -242,7 +255,11 @@ MOI.Utilities.@mix_of_scalar_sets(
     MOI.LessThan{T},
 )
 
-function mix_of_constraints(A::AbstractMatrix{T}, b::AbstractVector{T}, senses::Vector{ConstraintSense}) where {T}
+function mix_of_constraints(
+    A::AbstractMatrix{T},
+    b::AbstractVector{T},
+    senses::Vector{ConstraintSense},
+) where {T}
     @assert eachindex(b) == eachindex(senses)
     sets = MixedLinearSets{T}()
     for sense in senses
@@ -266,7 +283,12 @@ s.t.  A x == b
       x ≥ 0
 ```
 """
-function lp_standard_form(sense::MOI.OptimizationSense, c::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}) where {T}
+function lp_standard_form(
+    sense::MOI.OptimizationSense,
+    c::AbstractVector{T},
+    A::AbstractMatrix{T},
+    b::AbstractVector{T},
+) where {T}
     m, n = size(A)
     @assert length(c) == n
     @assert length(b) == m
@@ -286,7 +308,12 @@ sense ⟨c, x⟩
 s.t.  Ax <= b
 ```
 """
-function lp_geometric_form(sense::MOI.OptimizationSense, c::AbstractVector{T}, A::AbstractMatrix{T}, b::AbstractVector{T}) where {T}
+function lp_geometric_form(
+    sense::MOI.OptimizationSense,
+    c::AbstractVector{T},
+    A::AbstractMatrix{T},
+    b::AbstractVector{T},
+) where {T}
     m, n = size(A)
     @assert length(c) == n
     @assert length(b) == m

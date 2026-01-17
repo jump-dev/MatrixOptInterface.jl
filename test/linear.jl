@@ -17,10 +17,7 @@ end
 
 function _test_expected(form, expected, var_names, con_names, S)
     model = MOI.Utilities.Model{Float64}()
-    MOI.copy_to(
-        MOI.Bridges.Constraint.Scalarize{Float64}(model),
-        form,
-    )
+    MOI.copy_to(MOI.Bridges.Constraint.Scalarize{Float64}(model), form)
     MOI.set(
         model,
         MOI.VariableName(),
@@ -30,10 +27,9 @@ function _test_expected(form, expected, var_names, con_names, S)
     MOI.set(
         model,
         MOI.ConstraintName(),
-        MOI.ConstraintIndex{
-            MOI.ScalarAffineFunction{Float64},
-            S,
-        }.(eachindex(con_names)),
+        MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64},S}.(
+            eachindex(con_names),
+        ),
         con_names,
     )
     return MOI.Test.util_test_models_equal(
@@ -43,7 +39,6 @@ function _test_expected(form, expected, var_names, con_names, S)
         con_names,
     )
 end
-
 
 function test_standard_form()
     dense_A = [
@@ -76,24 +71,28 @@ function test_standard_form()
             [dense_c, sparsevec(dense_c)],
         )
             @testset "change $func" for (func, args) in [
-                (MatOI.lp_standard_form, (
-                    sense,
-                    c,
-                    A,
-                    b,
-                )),
-                (MatOI.lp_solver_form, (
-                    sense,
-                    c,
-                    A,
-                    b,
-                    [MatOI.EQUAL_TO, MatOI.EQUAL_TO],
-                    v_lb,
-                    v_ub,
-                )),
+                (MatOI.lp_standard_form, (sense, c, A, b)),
+                (
+                    MatOI.lp_solver_form,
+                    (
+                        sense,
+                        c,
+                        A,
+                        b,
+                        [MatOI.EQUAL_TO, MatOI.EQUAL_TO],
+                        v_lb,
+                        v_ub,
+                    ),
+                ),
             ]
                 lp = func(args...)
-                _test_expected(lp, expected, var_names, con_names, MOI.EqualTo{Float64})
+                _test_expected(
+                    lp,
+                    expected,
+                    var_names,
+                    con_names,
+                    MOI.EqualTo{Float64},
+                )
             end
         end
     end
@@ -127,13 +126,14 @@ function test_geometric_form()
             [dense_b, sparsevec(dense_b)],
             [dense_c, sparsevec(dense_c)],
         )
-            lp = MatOI.lp_geometric_form(
-                sense,
-                c,
-                A,
-                b,
+            lp = MatOI.lp_geometric_form(sense, c, A, b)
+            _test_expected(
+                lp,
+                expected,
+                var_names,
+                con_names,
+                MOI.LessThan{Float64},
             )
-            _test_expected(lp, expected, var_names, con_names, MOI.LessThan{Float64})
         end
     end
 end
@@ -170,16 +170,14 @@ function test_form()
             [dense_ub, sparsevec(dense_ub)],
             [dense_c, sparsevec(dense_c)],
         )
-            lp = MatOI.lp_form(
-                sense,
-                c,
-                A,
-                c_lb,
-                c_ub,
-                v_lb,
-                v_ub,
+            lp = MatOI.lp_form(sense, c, A, c_lb, c_ub, v_lb, v_ub)
+            _test_expected(
+                lp,
+                expected,
+                var_names,
+                con_names,
+                MOI.Interval{Float64},
             )
-            _test_expected(lp, expected, var_names, con_names, MOI.Interval{Float64})
         end
     end
 end
