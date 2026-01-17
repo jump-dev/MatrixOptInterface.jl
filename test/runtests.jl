@@ -67,7 +67,9 @@ const dense_A = [
                     MOI.ConstraintIndex{
                         MOI.ScalarAffineFunction{Float64},
                         MOI.EqualTo{Float64},
-                    }.(1:2),
+                    }.(
+                        1:2,
+                    ),
                     con_names,
                 )
                 return MOIT.util_test_models_equal(
@@ -146,7 +148,9 @@ const dense_A = [
                     MOI.ConstraintIndex{
                         MOI.ScalarAffineFunction{Float64},
                         MOI.LessThan{Float64},
-                    }.(1:2),
+                    }.(
+                        1:2,
+                    ),
                     con_names,
                 )
                 return MOIT.util_test_models_equal(
