@@ -285,7 +285,7 @@ s.t.  c_lb <= Ax <= c_ub
       v_lb <=  x <= v_ub
 ```
 """
-struct LPForm{T,AT<:AbstractMatrix{T},VT<:AbstractVector{T}} <: LPMixedForm{T} #, V<:AbstractVector{T} #, M<:AbstractMatrix{T}}
+mutable struct LPForm{T,AT<:AbstractMatrix{T},VT<:AbstractVector{T}} <: LPMixedForm{T} #, V<:AbstractVector{T} #, M<:AbstractMatrix{T}}
     sense::MOI.OptimizationSense
     c::VT
     A::AT
@@ -293,6 +293,30 @@ struct LPForm{T,AT<:AbstractMatrix{T},VT<:AbstractVector{T}} <: LPMixedForm{T} #
     c_ub::VT
     v_lb::VT
     v_ub::VT
+    function LPForm{T,AT,VT}(
+        sense::MOI.OptimizationSense,
+        c,
+        A,
+        c_lb,
+        c_ub,
+        v_lb,
+        v_ub,
+    ) where {T,AT,VT}
+        model = new{T,AT,VT}(
+            sense,
+            c,
+            A,
+            c_lb,
+            c_ub,
+            v_lb,
+            v_ub,
+        )
+        return model
+    end
+    function LPForm{T,AT,VT}() where {T,AT,VT}
+        model = new{T,AT,VT}()
+        return model
+    end
 end
 
 function _constraint_bound_sense(model::LPForm, i)
