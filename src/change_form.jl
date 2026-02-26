@@ -17,21 +17,6 @@ end
 
 function change_form(
     ::Type{LPForm{T,AT,VT}},
-    lp::LPStandardForm{T},
-) where {T,AT,VT}
-    return LPForm{T,AT,VT}(
-        lp.sense,
-        lp.c,
-        lp.A,
-        lp.b,
-        lp.b,
-        fill(zero(T), length(lp.c)),
-        fill(typemax(T), length(lp.c)),
-    )
-end
-
-function change_form(
-    ::Type{LPForm{T,AT,VT}},
     lp::LPGeometricForm{T},
 ) where {T,AT,VT}
     return LPForm{T,AT,VT}(
@@ -123,31 +108,6 @@ function change_form(
 ) where {T,AT,VT,F<:AbstractLPForm{T}}
     temp_lp = change_form(LPForm{T,AT,VT}, lp)
     return change_form(LPGeometricForm{T,AT,VT}, temp_lp)
-end
-
-function change_form(
-    ::Type{LPStandardForm{T,AT,VT}},
-    lp::LPStandardForm,
-) where {T,AT,VT}
-    return LPStandardForm(lp.sense, lp.c, lp.A, lp.b)
-end
-
-function change_form(
-    ::Type{LPStandardForm{T,AT,VT}},
-    lp::LPGeometricForm{T},
-) where {T,AT,VT}
-    new_A = hcat(lp.A, -lp.A, AT(I, length(lp.b), length(lp.b)))
-    new_c = vcat(lp.c, -lp.c, fill(0.0, length(lp.b)))
-    return LPStandardForm{T,AT,VT}(lp.sense, new_c, new_A, copy(lp.b))
-end
-
-function change_form(
-    ::Type{LPStandardForm{T,AT,VT}},
-    lp::F,
-) where {T,AT,VT,F<:AbstractLPForm{T}}
-    temp_lp = change_form(LPForm{T,AT,VT}, lp)
-    new_lp = change_form(LPGeometricForm{T,AT,VT}, temp_lp)
-    return change_form(LPStandardForm{T,AT,VT}, new_lp)
 end
 
 function change_form(

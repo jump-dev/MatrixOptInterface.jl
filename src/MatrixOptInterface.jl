@@ -6,6 +6,7 @@
 module MatrixOptInterface
 
 using LinearAlgebra, SparseArrays
+import FillArrays
 using MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MathOptInterface.Utilities
@@ -67,6 +68,6 @@ end
 include("sparse_matrix.jl")
 include("conic_form.jl")
 include("matrix_input.jl")
-include("change_form.jl")
+#include("change_form.jl")
 
 end
