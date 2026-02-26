@@ -1,8 +1,5 @@
 # MatrixOptInterface.jl
 
-> [!WARNING]
-> Needs the development version of MathOptInterface
-
 [![Build Status](https://github.com/jump-dev/MatrixOptInterface.jl/workflows/CI/badge.svg)](https://github.com/jump-dev/MatrixOptInterface.jl/actions)
 [![Coverage](https://codecov.io/gh/jump-dev/MatrixOptInterface.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jump-dev/MatrixOptInterface.jl)
 
