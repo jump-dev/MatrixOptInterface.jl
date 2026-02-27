@@ -14,20 +14,22 @@ s.t.  b_i - A_i x ∈ C_i ∀ i
 with each `C_i` a cone defined in MOI.
 """
 function empty_geometric_conic_form(cones; Tv = Float64, Ti = Int, I = MOI.Utilities.OneBasedIndexing)
-    return MOI.Utilities.GenericModel{T}(
-        MOI.Utilities.ObjectiveContainer{T}(),
+    model = MOI.Utilities.GenericModel{Tv}(
+        MOI.Utilities.ObjectiveContainer{Tv}(),
         MOI.Utilities.FreeVariables(),
         MOI.Utilities.MatrixOfConstraints{
-            T,
+            Tv,
             MOI.Utilities.MutableSparseMatrixCSC{
                 Tv,
                 Ti,
                 I,
             },
-            Vector{T},
-            ProductOfSets{T},
-        },
+            Vector{Tv},
+            ProductOfSets{Tv},
+        }(),
     )
+    set_set_types(model.constraints.sets, cones)
+    return model
 end
 
 function geometric_conic_form(model::MOI.ModelLike, cones; kws...)
