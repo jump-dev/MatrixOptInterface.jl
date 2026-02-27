@@ -9,7 +9,7 @@
 Represents an optimization model of the form:
 ```
 sense ⟨c, x⟩ + c0
-s.t.  b_i - A_i x ∈ C_i ∀ i
+s.t.  A_i x + b_i ∈ C_i ∀ i
 ```
 with each `C_i` a cone defined in MOI.
 """

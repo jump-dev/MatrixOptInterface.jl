@@ -111,7 +111,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
                 9,
                 11,
             ],
-            T[
+            -T[
                 -1,
                 -1,
                 -1,
@@ -265,7 +265,7 @@ function psd2(
                 9,
                 11,
             ],
-            T[
+            -T[
                 1.0,
                 -1.0,
                 -0.45,
