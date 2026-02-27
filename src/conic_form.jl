@@ -42,9 +42,8 @@ end
 _coef_type(::MOI.Utilities.AbstractModel{T}) where {T} = T
 
 function objective_vector(model::MOI.ModelLike; T = _coef_type(model))
-    obj = MOI.get(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
-    dest.objective_constant = MOI.constant(obj)
-    c = zeros(A.n)
+    obj = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}())
+    c = zeros(MOI.get(model, MOI.NumberOfVariables()))
     for term in obj.terms
         c[term.variable.value] += term.coefficient
     end
