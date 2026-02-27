@@ -3,7 +3,7 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
+function _test_matrix_equal(A::MOI.Utilities.MutableSparseMatrixCSC, B::SparseMatrixCSC)
     @test A.m == B.m
     @test A.n == B.n
     @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
