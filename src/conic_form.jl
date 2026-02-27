@@ -13,17 +13,18 @@ s.t.  b_i - A_i x ∈ C_i ∀ i
 ```
 with each `C_i` a cone defined in MOI.
 """
-function empty_geometric_conic_form(cones; Tv = Float64, Ti = Int, I = MOI.Utilities.OneBasedIndexing)
+function empty_geometric_conic_form(
+    cones;
+    Tv = Float64,
+    Ti = Int,
+    I = MOI.Utilities.OneBasedIndexing,
+)
     model = MOI.Utilities.GenericModel{Tv}(
         MOI.Utilities.ObjectiveContainer{Tv}(),
         MOI.Utilities.FreeVariables(),
         MOI.Utilities.MatrixOfConstraints{
             Tv,
-            MOI.Utilities.MutableSparseMatrixCSC{
-                Tv,
-                Ti,
-                I,
-            },
+            MOI.Utilities.MutableSparseMatrixCSC{Tv,Ti,I},
             Vector{Tv},
             ProductOfSets{Tv},
         }(),

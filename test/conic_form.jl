@@ -74,11 +74,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
 
     conic_form, index_map = MatOI.geometric_conic_form(
         model,
-        [
-            MOI.PositiveSemidefiniteConeTriangle,
-            MOI.SecondOrderCone,
-            MOI.Zeros,
-        ];
+        [MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros];
         Tv = T,
         I,
     )
