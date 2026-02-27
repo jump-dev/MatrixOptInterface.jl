@@ -72,21 +72,22 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
     )
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{
-        T,
-        MOI.Utilities.MutableSparseMatrixCSC{T,Int,I},
-        Vector{T},
-    }([
-        MOI.PositiveSemidefiniteConeTriangle,
-        MOI.SecondOrderCone,
-        MOI.Zeros,
-    ])
-    index_map = MOI.copy_to(conic_form, model)
+    conic_form, index_map = MatOI.geometric_conic_form(
+        model,
+        [
+            MOI.PositiveSemidefiniteConeTriangle,
+            MOI.SecondOrderCone,
+            MOI.Zeros,
+        ];
+        Tv = T,
+        I,
+    )
+    @test index_map isa MOI.Utilities.IndexMap
 
-    @test conic_form.c' ≈ T[2 2 2 0 2 2 1 0 0]
-    @test conic_form.b' ≈ T[0 0 0 0 0 0 0 0 0 -1 -inv(T(2))]
+    @test MatOI.objective_vector(conic_form)' ≈ T[2 2 2 0 2 2 1 0 0]
+    @test conic_form.constraints.constants' ≈ T[0 0 0 0 0 0 0 0 0 -1 -inv(T(2))]
     return _test_matrix_equal(
-        conic_form.A,
+        conic_form.constraints.coefficients,
         SparseMatrixCSC(
             11,
             9,
@@ -224,17 +225,18 @@ function psd2(
     )
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{
-        T,
-        MatOI.SparseMatrixCSRtoCSC{T,Int,I},
-        Vector{T},
-    }([MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle])
-    index_map = MOI.copy_to(conic_form, model)
+    conic_form, index_map = MatOI.geometric_conic_form(
+        model,
+        [MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle];
+        Tv = T,
+        I,
+    )
+    @test index_map isa MOI.Utilities.IndexMap
 
-    @test conic_form.c ≈ [zeros(T, 6); one(T)]
-    @test conic_form.b ≈ [T(10); zeros(T, 10)]
+    @test MatOI.objective_vector(conic_form) ≈ [zeros(T, 6); one(T)]
+    @test conic_form.constraint.constants ≈ [T(10); zeros(T, 10)]
     return _test_matrix_equal(
-        conic_form.A,
+        conic_form.constraint.coefficients,
         SparseMatrixCSC(
             11,
             7,
