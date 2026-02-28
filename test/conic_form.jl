@@ -11,7 +11,7 @@ function _test_matrix_equal(
     @test A.m == B.m
     @test A.n == B.n
     @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
-    shift = I isa MOI.Utilities.OneBasedIndexing ? 0 : 1
+    shift = I == MOI.Utilities.OneBasedIndexing ? 0 : 1
     @test A.rowval .+ shift == B.rowval
     @test A.colptr .+ shift == B.colptr
 end
