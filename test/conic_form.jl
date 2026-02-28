@@ -236,9 +236,9 @@ function psd2(
     @test index_map isa MOI.Utilities.IndexMap
 
     @test MatOI.objective_vector(conic_form) ≈ [zeros(T, 6); one(T)]
-    @test conic_form.constraint.constants ≈ [T(10); zeros(T, 10)]
+    @test conic_form.constraints.constants ≈ [T(10); zeros(T, 10)]
     return _test_matrix_equal(
-        conic_form.constraint.coefficients,
+        conic_form.constraints.coefficients,
         SparseMatrixCSC(
             11,
             7,
