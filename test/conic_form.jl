@@ -3,12 +3,17 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-function _test_matrix_equal(A::MOI.Utilities.MutableSparseMatrixCSC, B::SparseMatrixCSC)
+function _test_matrix_equal(
+    A::MOI.Utilities.MutableSparseMatrixCSC,
+    B::SparseMatrixCSC,
+    I,
+)
     @test A.m == B.m
     @test A.n == B.n
     @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
-    @test A.rowval == B.rowval
-    @test A.colptr == B.colptr
+    shift = I isa MOI.Utilities.OneBasedIndexing ? 0 : 1
+    @test A.rowval .+ shift == B.rowval
+    @test A.colptr .+ shift == B.colptr
 end
 
 # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
