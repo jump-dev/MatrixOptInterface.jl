@@ -140,6 +140,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
                 -1,
             ],
         ),
+        I,
     )
 end
 
@@ -299,6 +300,7 @@ function psd2(
                 1.0,
             ],
         ),
+        I,
     )
 end
 
