@@ -3,31 +3,17 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-function _test_matrix_equal(A::SparseMatrixCSC, B::SparseMatrixCSC)
-    @test A.m == B.m
-    @test A.n == B.n
-    @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
-    @test A.rowval == B.rowval
-    @test A.colptr == B.colptr
-end
-
 function _test_matrix_equal(
-    A::MatOI.SparseMatrixCSRtoCSC{Tv,Ti,I},
+    A::MOI.Utilities.MutableSparseMatrixCSC,
     B::SparseMatrixCSC,
-) where {Tv,Ti,I}
+    I,
+)
     @test A.m == B.m
     @test A.n == B.n
     @test A.nzval ≈ B.nzval atol = ATOL rtol = RTOL
-    if I <: MatOI.OneBasedIndexing
-        @test A.rowval == B.rowval
-        @test A.colptr == B.colptr
-    else
-        @test A.rowval == B.rowval .- 1
-        @test A.colptr == B.colptr .- 1
-    end
-    sA = convert(typeof(B), A)
-    @test typeof(sA) == typeof(B)
-    return _test_matrix_equal(sA, B)
+    shift = I == MOI.Utilities.OneBasedIndexing ? 0 : 1
+    @test A.rowval .+ shift == B.rowval
+    @test A.colptr .+ shift == B.colptr
 end
 
 # _psd1test: https://github.com/jump-dev/MathOptInterface.jl/blob/master/src/Test/contconic.jl#L2417
@@ -91,21 +77,18 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
     )
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{
-        T,
-        MatOI.SparseMatrixCSRtoCSC{T,Int,I},
-        Vector{T},
-    }([
-        MOI.PositiveSemidefiniteConeTriangle,
-        MOI.SecondOrderCone,
-        MOI.Zeros,
-    ])
-    index_map = MOI.copy_to(conic_form, model)
+    conic_form, index_map = MatOI.geometric_conic_form(
+        model,
+        [MOI.PositiveSemidefiniteConeTriangle, MOI.SecondOrderCone, MOI.Zeros];
+        Tv = T,
+        I,
+    )
+    @test index_map isa MOI.Utilities.IndexMap
 
-    @test conic_form.c' ≈ T[2 2 2 0 2 2 1 0 0]
-    @test conic_form.b' ≈ T[0 0 0 0 0 0 0 0 0 -1 -inv(T(2))]
+    @test MatOI.objective_vector(conic_form)' ≈ T[2 2 2 0 2 2 1 0 0]
+    @test conic_form.constraints.constants' ≈ T[0 0 0 0 0 0 0 0 0 -1 -inv(T(2))]
     return _test_matrix_equal(
-        conic_form.A,
+        conic_form.constraints.coefficients,
         SparseMatrixCSC(
             11,
             9,
@@ -133,7 +116,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
                 9,
                 11,
             ],
-            T[
+            -T[
                 -1,
                 -1,
                 -1,
@@ -157,6 +140,7 @@ function psd1(::Type{T}, ::Type{I}) where {T,I}
                 -1,
             ],
         ),
+        I,
     )
 end
 
@@ -243,17 +227,18 @@ function psd2(
     )
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
 
-    conic_form = MatOI.GeometricConicForm{
-        T,
-        MatOI.SparseMatrixCSRtoCSC{T,Int,I},
-        Vector{T},
-    }([MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle])
-    index_map = MOI.copy_to(conic_form, model)
+    conic_form, index_map = MatOI.geometric_conic_form(
+        model,
+        [MOI.Nonnegatives, MOI.Zeros, MOI.PositiveSemidefiniteConeTriangle];
+        Tv = T,
+        I,
+    )
+    @test index_map isa MOI.Utilities.IndexMap
 
-    @test conic_form.c ≈ [zeros(T, 6); one(T)]
-    @test conic_form.b ≈ [T(10); zeros(T, 10)]
+    @test MatOI.objective_vector(conic_form) ≈ [zeros(T, 6); one(T)]
+    @test conic_form.constraints.constants ≈ [T(10); zeros(T, 10)]
     return _test_matrix_equal(
-        conic_form.A,
+        conic_form.constraints.coefficients,
         SparseMatrixCSC(
             11,
             7,
@@ -286,7 +271,7 @@ function psd2(
                 9,
                 11,
             ],
-            T[
+            -T[
                 1.0,
                 -1.0,
                 -0.45,
@@ -315,11 +300,12 @@ function psd2(
                 1.0,
             ],
         ),
+        I,
     )
 end
 
 @testset "PSD $T, $I" for T in [Float64, BigFloat],
-    I in [MatOI.ZeroBasedIndexing, MatOI.OneBasedIndexing]
+    I in [MOI.Utilities.ZeroBasedIndexing, MOI.Utilities.OneBasedIndexing]
 
     psd1(T, I)
     psd2(T, I)
