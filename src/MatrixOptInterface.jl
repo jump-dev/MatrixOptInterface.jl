@@ -65,7 +65,6 @@ end
 
 @enum VariableType CONTINUOUS INTEGER BINARY
 
-include("product_of_sets.jl")
 include("conic_form.jl")
 include("matrix_input.jl")
 #include("change_form.jl")

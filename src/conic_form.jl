@@ -26,10 +26,12 @@ function empty_geometric_conic_form(
             Tv,
             MOI.Utilities.MutableSparseMatrixCSC{Tv,Ti,I},
             Vector{Tv},
-            ProductOfSets{Tv},
+            MOI.Utilities.RuntimeProductOfSets{Tv},
         }(),
     )
-    set_set_types(model.constraints.sets, cones)
+    for S in cones
+        MOI.Utilities.add_set_type(model.constraints.sets, S)
+    end
     return model
 end
 
